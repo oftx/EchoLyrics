@@ -7,6 +7,7 @@ import { StandardLrcParser } from '@/core/parsers/StandardLrcParser';
 import { LyricsData } from '@/core/models/LyricsData';
 import { Logger, LogEntry } from '@/core/utils/Logger';
 import { ExportManagerModal } from './components/ExportManagerModal';
+import { FFmpegConverter } from '@/core/services/FFmpegConverter';
 
 interface PlaylistItem {
     name: string;
@@ -18,6 +19,7 @@ interface PlaylistItem {
 
 // Singleton instance for the app
 const manager = new LyricsManager();
+const converter = new FFmpegConverter();
 // manager.getSearcher().registerProvider(new MockNetworkProvider());
 manager.getSearcher().registerProvider(new NeteaseNetworkProvider());
 
@@ -46,6 +48,7 @@ export default function App() {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [isHoveringLyrics, setIsHoveringLyrics] = useState(false);
     const [showExportModal, setShowExportModal] = useState(false);
+    const [isConverting, setIsConverting] = useState(false);
 
     const audioRef = useRef<HTMLAudioElement>(null);
     const lyricsContainerRef = useRef<HTMLDivElement>(null);
@@ -133,6 +136,7 @@ export default function App() {
         // Cleanup previous
         setLyrics(null);
         setCurrentTime(0);
+        setIsConverting(false); // Reset
 
         // Load Audio
         const url = URL.createObjectURL(item.audioFile);
@@ -143,10 +147,8 @@ export default function App() {
         setSearchTitle(item.title || item.name);
         setSearchArtist(item.artist || "");
 
-        // Race condition mitigation: Generate a signature (or ID) for this play session
-        // Simple signature: item.name + timestamp. Real robustness needs an AbortController in manager.
-        // For now, we just ignore results if signature changed.
-        const signature = item.name + Date.now();
+        // Generate signature for race condition check
+        const signature = `${item.name}-${Date.now()}`;
         setCurrentSongSignature(signature);
 
         // Load Lyrics
@@ -184,6 +186,57 @@ export default function App() {
             // Try to search online
             handleSearchForTrack(item, signature);
         }
+    };
+
+    const handleAudioError = async (e: any) => {
+        const error = e.target.error;
+        const currentItem = playlist[currentIndex];
+
+        console.log("[AudioError] Fired.", {
+            code: error?.code,
+            message: error?.message,
+            fileName: currentItem?.name,
+            ext: currentItem?.name?.split('.').pop()?.toLowerCase(),
+            isConverting
+        });
+
+        // Check availability
+        if (!currentItem) return;
+
+        // Check if it's a file type that likely needs transcoding (m4a, alac, flac)
+        const ext = currentItem.name.split('.').pop()?.toLowerCase();
+        const isCandidate = ext === 'm4a' || ext === 'flac' || ext === 'alac';
+
+        // Check if error implies format issue
+        const isFormatError = error && (
+            error.code === 3 ||
+            error.code === 4 ||
+            (error.message && typeof error.message === 'string' && error.message.includes("DEMUXER"))
+        );
+
+        // Should we transcode?
+        if ((isCandidate || isFormatError) && error && !isConverting) {
+            setStatusMsg("Format not native. Transcoding with FFmpeg...");
+            setIsConverting(true);
+            try {
+                const wavBlob = await converter.convertToWav(currentItem.audioFile);
+                const wavUrl = URL.createObjectURL(wavBlob);
+                setAudioSrc(wavUrl);
+                setStatusMsg("Transcoding complete. Playing...");
+                if (audioRef.current) {
+                    audioRef.current.load();
+                    audioRef.current.play();
+                }
+            } catch (err) {
+                console.error("FFmpeg conversion failed", err);
+                setStatusMsg("Transcoding failed. " + err);
+            } finally {
+                setIsConverting(false);
+            }
+            return;
+        }
+
+        setStatusMsg("Error playing audio: " + (error?.message || "Unknown error"));
     };
 
     const handleNext = () => {
@@ -548,6 +601,7 @@ export default function App() {
                             style={{ width: '100%' }}
                             onTimeUpdate={handleTimeUpdate}
                             onEnded={handleAudioEnded}
+                            onError={handleAudioError}
                         />
                     </div>
                 )
