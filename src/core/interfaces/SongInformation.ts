@@ -34,4 +34,10 @@ export interface SongInformation {
      * Unique identifier for the source (e.g. file path, Spotify ID).
      */
     sourceId: string;
+
+    /**
+     * Optional stable ID for persistence (e.g. filename).
+     * Used for caching overrides instead of title/artist.
+     */
+    persistenceId?: string;
 }

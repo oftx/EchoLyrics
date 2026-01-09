@@ -7,10 +7,11 @@ export class NeteaseNetworkProvider implements LyricsProvider {
     public name = "Netease Cloud Music";
     private readonly API_BASE = "/api/netease"; // Proxied path
 
-    public async search(song: SongInformation): Promise<LyricResult[]> {
+    public async search(song: SongInformation, limit: number = 15): Promise<LyricResult[]> {
         try {
-            const keyword = `${song.title} ${song.artists[0]}`;
-            const searchUrl = `${this.API_BASE}/api/cloudsearch/pc?s=${encodeURIComponent(keyword)}&type=1&offset=0&limit=5`;
+            const artistPart = (song.artists && song.artists[0]) ? ` ${song.artists[0]}` : "";
+            const keyword = `${song.title}${artistPart}`;
+            const searchUrl = `${this.API_BASE}/api/cloudsearch/pc?s=${encodeURIComponent(keyword)}&type=1&offset=0&limit=${limit}`;
 
             Logger.info(`[Netease] Searching: ${searchUrl}`);
 

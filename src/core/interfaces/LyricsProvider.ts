@@ -12,7 +12,8 @@ export interface LyricsProvider {
 
     /**
      * Search for lyrics.
-     * @param song Song metadata.
+     * @param song Metadata
+     * @param limit Max results
      */
-    search(song: SongInformation): Promise<LyricResult[]>;
+    search(song: SongInformation, limit: number): Promise<LyricResult[]>;
 }

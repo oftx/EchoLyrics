@@ -15,10 +15,10 @@ export class LyricsSearcherService implements LyricsSearcher {
         this.providers.push(provider);
     }
 
-    public async search(song: SongInformation): Promise<LyricResult[]> {
+    public async search(song: SongInformation, limit: number = 15): Promise<LyricResult[]> {
         // Spec 2.3.1.2: Multi-source concurrent search.
         const searchTasks = this.providers.map(p =>
-            p.search(song).catch(err => {
+            p.search(song, limit).catch(err => {
                 console.error(`Provider ${p.name} failed:`, err);
                 return [] as LyricResult[];
             })
