@@ -1,16 +1,1304 @@
+/* ==========================================================================
+   Echo Lyrics - Design System
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. CSS Variables / Design Tokens
+   -------------------------------------------------------------------------- */
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* Primary Colors - Purple gradient theme */
+  --primary: #8b5cf6;
+  --primary-light: #a78bfa;
+  --primary-dark: #7c3aed;
+  --primary-glow: rgba(139, 92, 246, 0.4);
+
+  /* Background Layers */
+  --bg-base: #0f0f14;
+  --bg-card: #1a1a24;
+  --bg-elevated: #252532;
+  --bg-input: #1e1e2a;
+
+  /* Border Colors */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-focus: var(--primary);
+
+  /* Text Colors */
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --text-disabled: #52525b;
+
+  /* Status Colors */
+  --success: #22c55e;
+  --success-muted: rgba(34, 197, 94, 0.2);
+  --warning: #f59e0b;
+  --warning-muted: rgba(245, 158, 11, 0.2);
+  --error: #ef4444;
+  --error-muted: rgba(239, 68, 68, 0.2);
+  --info: #3b82f6;
+  --info-muted: rgba(59, 130, 246, 0.2);
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px var(--primary-glow);
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+}
+
+/* --------------------------------------------------------------------------
+   2. Global Reset & Base Styles
+   -------------------------------------------------------------------------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--bg-base);
   min-height: 100vh;
 }
+
+#root {
+  min-height: 100vh;
+}
+
+/* --------------------------------------------------------------------------
+   3. Layout Components
+   -------------------------------------------------------------------------- */
+.app-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-6);
+  min-height: 100vh;
+}
+
+.app-header {
+  text-align: center;
+  margin-bottom: var(--space-8);
+}
+
+.app-title {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--primary-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 var(--space-2) 0;
+}
+
+/* --------------------------------------------------------------------------
+   4. Card Component
+   -------------------------------------------------------------------------- */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  transition: border-color var(--transition-base);
+}
+
+.card:hover {
+  border-color: var(--border-default);
+}
+
+.card-header {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.card--elevated {
+  box-shadow: var(--shadow-md);
+}
+
+/* --------------------------------------------------------------------------
+   5. Button Components
+   -------------------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.5;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Primary Button */
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+  border: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%);
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Secondary Button */
+.btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-input);
+  border-color: var(--primary);
+  color: var(--primary-light);
+}
+
+/* Ghost Button */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+/* Icon Button */
+.btn-icon {
+  padding: var(--space-2);
+  width: 36px;
+  height: 36px;
+}
+
+/* Button Sizes */
+.btn-sm {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.btn-lg {
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-base);
+}
+
+/* --------------------------------------------------------------------------
+   6. Input Components
+   -------------------------------------------------------------------------- */
+.input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.input:hover {
+  border-color: var(--border-default);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Input with label */
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.input-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* Number input */
+.input-number {
+  width: 70px;
+  text-align: center;
+}
+
+/* Select */
+.select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: 32px;
+}
+
+/* --------------------------------------------------------------------------
+   7. Folder Input / Upload Zone
+   -------------------------------------------------------------------------- */
+.upload-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  border: 2px dashed var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.upload-zone:hover {
+  border-color: var(--primary);
+  background: var(--bg-elevated);
+}
+
+.upload-zone-label {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.upload-zone input[type="file"] {
+  display: none;
+}
+
+.upload-zone-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* --------------------------------------------------------------------------
+   8. Playlist Component
+   -------------------------------------------------------------------------- */
+.playlist {
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-5);
+}
+
+.playlist-item {
+  display: flex;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.playlist-item:last-child {
+  border-bottom: none;
+}
+
+.playlist-item:hover {
+  background: var(--bg-elevated);
+}
+
+.playlist-item--active {
+  background: linear-gradient(90deg, var(--primary-glow) 0%, transparent 100%);
+  border-left: 3px solid var(--primary);
+}
+
+.playlist-item-index {
+  width: 28px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.playlist-item-name {
+  flex: 1;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-item--active .playlist-item-name {
+  color: var(--primary-light);
+  font-weight: 500;
+}
+
+.playlist-item-badge {
+  font-size: var(--text-xs);
+  color: var(--success);
+  background: var(--success-muted);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  margin-left: var(--space-2);
+}
+
+/* --------------------------------------------------------------------------
+   9. Controls Bar
+   -------------------------------------------------------------------------- */
+.controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.search-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+/* --------------------------------------------------------------------------
+   10. Status Bar
+   -------------------------------------------------------------------------- */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+/* --------------------------------------------------------------------------
+   11. Audio Player
+   -------------------------------------------------------------------------- */
+.audio-player-wrapper {
+  margin-bottom: var(--space-5);
+}
+
+.audio-player-wrapper audio {
+  width: 100%;
+  color-scheme: dark;
+}
+
+
+/* --------------------------------------------------------------------------
+   12. Log Panel
+   -------------------------------------------------------------------------- */
+.log-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.log-panel-header {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.log-panel-content {
+  max-height: 150px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.log-entry {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+}
+
+.log-time {
+  color: var(--text-disabled);
+  flex-shrink: 0;
+}
+
+.log-level {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.log-level--info { color: var(--success); }
+.log-level--warn { color: var(--warning); }
+.log-level--error { color: var(--error); }
+
+.log-message {
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.log-data {
+  color: var(--text-muted);
+}
+
+.log-empty {
+  color: var(--text-disabled);
+  font-style: italic;
+}
+
+/* --------------------------------------------------------------------------
+   13. Lyrics Container
+   -------------------------------------------------------------------------- */
+.lyrics-container {
+  position: relative;
+  height: 420px;
+  background: linear-gradient(180deg, var(--bg-card) 0%, rgba(26, 26, 36, 0.95) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  /* Removed large padding to prevent wasting space, mask handles the fade */
+  padding: 0 var(--space-4);
+  margin-top: var(--space-3);
+  overflow: hidden; /* Ensure mask applies correctly */
+}
+
+.lyrics-scroller {
+  height: 100%;
+  overflow-y: auto;
+  position: relative;
+  /* Use mask image for smooth fade out at top/bottom */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+  padding: var(--space-8) 0; /* Add padding inside scroller so text can reach the center/ends */
+}
+
+/* Removed ::before and ::after pseudo-elements that caused the hard overlay issue */
+
+.lyrics-content {
+  position: relative;
+  min-height: 100%;
+  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Center lyrics horizontally */
+}
+
+.lyrics-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-disabled);
+}
+
+.lyrics-pip-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--space-4);
+  color: var(--text-muted);
+}
+
+/* Pop-out button */
+.lyrics-popout-btn {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 10;
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+
+.lyrics-container:hover .lyrics-popout-btn {
+  opacity: 1;
+}
+
+/* --------------------------------------------------------------------------
+   14. Lyric Line
+   -------------------------------------------------------------------------- */
+.lyric-line {
+  margin: var(--space-1) 0;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  transform-origin: center center;
+  min-height: 1.2em;
+}
+
+/* Hide empty lyric lines */
+.lyric-line:empty {
+  display: none;
+}
+
+.lyric-line:hover {
+  color: var(--text-primary) !important;
+}
+
+.lyric-line--inactive {
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}
+
+.lyric-line--active {
+  color: var(--primary-light);
+  font-size: 1.3em;
+  font-weight: 600;
+  transform: scale(1.05);
+  text-shadow: 0 0 30px var(--primary-glow);
+}
+
+/* Syllable highlighting */
+.lyric-syllable {
+  display: inline-block;
+  margin-right: 4px;
+  transition: color 50ms linear;
+}
+
+.lyric-syllable--passed {
+  color: var(--primary-light);
+}
+
+.lyric-syllable--active {
+  color: #ffeb3b;
+}
+
+.lyric-syllable--upcoming {
+  color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   15. Modal / Overlay
+   -------------------------------------------------------------------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn var(--transition-base);
+}
+
+.modal-content {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  max-width: 90%;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp var(--transition-slow);
+}
+
+.modal-header {
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.modal-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-5);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Candidates Modal - smaller */
+.modal-content--candidates {
+  width: 340px;
+}
+
+/* Export Modal - larger */
+.modal-content--export {
+  width: 900px;
+  height: 80vh;
+}
+
+/* --------------------------------------------------------------------------
+   16. Candidates List
+   -------------------------------------------------------------------------- */
+.candidate-item {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.candidate-item:hover {
+  background: var(--bg-elevated);
+}
+
+.candidate-item:last-child {
+  border-bottom: none;
+}
+
+.candidate-title {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.candidate-artist {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.candidate-source {
+  font-size: var(--text-xs);
+  color: var(--text-disabled);
+}
+
+/* --------------------------------------------------------------------------
+   17. Table (Export Modal)
+   -------------------------------------------------------------------------- */
+.table-wrapper {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+}
+
+.table th {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: 500;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.table tr {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.table tr:last-child {
+  border-bottom: none;
+}
+
+.table tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.table tr:hover {
+  background: var(--bg-elevated);
+}
+
+.table-status--ready {
+  color: var(--success);
+}
+
+.table-status--missing {
+  color: var(--error);
+}
+
+.table-status--mismatch {
+  color: var(--warning);
+}
+
+/* --------------------------------------------------------------------------
+   18. Scrollbar Styling
+   -------------------------------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-disabled);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* --------------------------------------------------------------------------
+   19. Animations
+   -------------------------------------------------------------------------- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* --------------------------------------------------------------------------
+   20. Utility Classes
+   -------------------------------------------------------------------------- */
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-muted { color: var(--text-muted); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
+.text-error { color: var(--error); }
+
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-2 { gap: var(--space-2); }
+.gap-3 { gap: var(--space-3); }
+.gap-4 { gap: var(--space-4); }
+
+.mt-4 { margin-top: var(--space-4); }
+.mt-5 { margin-top: var(--space-5); }
+.mb-4 { margin-bottom: var(--space-4); }
+.mb-5 { margin-bottom: var(--space-5); }
+
+.hidden { display: none; }
+
+/* --------------------------------------------------------------------------
+   21. Upload Zone Spacing (Fix close spacing issue)
+   -------------------------------------------------------------------------- */
+.upload-zone {
+  margin-bottom: var(--space-6);
+}
+
+/* --------------------------------------------------------------------------
+   22. Playlist Section with Header
+   -------------------------------------------------------------------------- */
+.playlist-section {
+  margin-bottom: var(--space-5);
+}
+
+.playlist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border: 1px solid var(--border-subtle);
+  border-bottom: none;
+}
+
+.playlist-count {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.playlist-header .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.playlist-section .playlist {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  max-height: 250px;
+}
+
+/* --------------------------------------------------------------------------
+   23. Search Controls - Input Width Fix
+   -------------------------------------------------------------------------- */
+.search-controls .input {
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.search-controls .input-number {
+  width: 70px;
+}
+
+/* --------------------------------------------------------------------------
+   24. Song Info Header
+   -------------------------------------------------------------------------- */
+.song-info {
+  text-align: center;
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  background: linear-gradient(180deg, var(--bg-elevated) 0%, transparent 100%);
+  border-radius: var(--radius-lg);
+}
+
+.song-title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-1) 0;
+  line-height: 1.3;
+}
+
+.song-artist {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   25. Audio Player Styling
+   -------------------------------------------------------------------------- */
+.audio-player-wrapper {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.audio-player-wrapper audio {
+  flex: 1;
+  height: 40px;
+  border-radius: var(--radius-md);
+}
+
+/* Custom Audio Player */
+.custom-player {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+}
+
+.custom-player-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-base);
+}
+
+.custom-player-btn:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.custom-player-btn--play {
+  width: 48px;
+  height: 48px;
+  background: var(--primary);
+  color: white;
+  font-size: 20px;
+  line-height: 1;
+  /* Ensure icons are vertically centered */
+  padding: 0;
+}
+
+.custom-player-btn--play:hover {
+  background: var(--primary-hover);
+  transform: scale(1.05);
+}
+
+.custom-player-time {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  min-width: 90px;
+  font-variant-numeric: tabular-nums;
+}
+
+.custom-player-progress {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-elevated);
+  appearance: none;
+  cursor: pointer;
+}
+
+.custom-player-progress::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  transition: transform var(--transition-base);
+}
+
+.custom-player-progress::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.custom-player-progress::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: none;
+  cursor: pointer;
+}
+
+.audio-player-wrapper audio::-webkit-media-controls-current-time-display,
+.audio-player-wrapper audio::-webkit-media-controls-time-remaining-display {
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   26. Collapsible Log Panel
+   -------------------------------------------------------------------------- */
+.log-panel {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: var(--space-5);
+}
+
+.log-panel--closed {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+}
+
+.log-panel--open {
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+}
+
+.log-panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--transition-fast);
+}
+
+.log-panel-header:hover {
+  background: var(--bg-elevated);
+}
+
+.log-panel-content {
+  padding: var(--space-3);
+  max-height: 180px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.log-entry {
+  padding: var(--space-1) 0;
+}
+
+.log-time {
+  color: var(--text-muted);
+  margin-right: var(--space-2);
+}
+
+.log-level {
+  font-weight: 600;
+  margin-right: var(--space-2);
+}
+
+.log-level--info {
+  color: var(--success);
+}
+
+.log-level--warn {
+  color: var(--warning);
+}
+
+.log-level--error {
+  color: var(--error);
+}
+
+.log-message {
+  color: var(--text-secondary);
+}
+
+.log-data {
+  color: var(--text-muted);
+}
+
+.log-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: var(--space-4);
+}
+
+/* --------------------------------------------------------------------------
+   27. Table Status Classes for Export Modal
+   -------------------------------------------------------------------------- */
+.table-status--ready {
+  color: var(--success);
+}
+
+.table-status--mismatch {
+  color: var(--warning);
+}
+
+.table-status--missing {
+  color: var(--error);
+}
+
+/* --------------------------------------------------------------------------
+   28. Number Stepper Component
+   -------------------------------------------------------------------------- */
+.number-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.number-stepper-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.number-stepper-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.number-stepper-btn--plus {
+  color: var(--primary-light);
+}
+
+.number-stepper-btn--plus:hover {
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.number-stepper-value {
+  min-width: 40px;
+  padding: 0 var(--space-2);
+  text-align: center;
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-input);
+}
+
+.number-stepper-input {
+  width: 40px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.number-stepper-input:focus {
+  outline: none;
+}
+
+/* --------------------------------------------------------------------------
+   29. PiP (Pop-out) Window Styles
+   -------------------------------------------------------------------------- */
+.pip-header {
+  text-align: center;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.pip-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-1) 0;
+}
+
+.pip-artist {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   30. Song Info Fix (remove extra border)
+   -------------------------------------------------------------------------- */
+.song-info {
+  text-align: center;
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  border-radius: 0;
+}
+
+.song-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-1) 0;
+  line-height: 1.3;
+}
+
+.song-artist {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+
