@@ -8,6 +8,7 @@ import { LyricsData } from '@/core/models/LyricsData';
 import { Logger, LogEntry } from '@/core/utils/Logger';
 import { ExportManagerModal } from './components/ExportManagerModal';
 import { FFmpegConverter } from '@/core/services/FFmpegConverter';
+import { MetadataService } from '@/core/services/MetadataService';
 
 interface PlaylistItem {
     name: string;
@@ -20,6 +21,7 @@ interface PlaylistItem {
 // Singleton instance for the app
 const manager = new LyricsManager();
 const converter = new FFmpegConverter();
+const metadataService = new MetadataService();
 // manager.getSearcher().registerProvider(new MockNetworkProvider());
 manager.getSearcher().registerProvider(new NeteaseNetworkProvider());
 
@@ -151,30 +153,41 @@ export default function App() {
         const signature = `${item.name}-${Date.now()}`;
         setCurrentSongSignature(signature);
 
-        // Load Lyrics
+        // Fetch Metadata (Async)
+        // We do this concurrently with audio loading to save time, but before lyric search.
+        let metaTitle = item.title;
+        let metaArtist = item.artist;
+        let embeddedLyrics = null;
+
+        try {
+            const metadata = await metadataService.parse(item.audioFile);
+            if (metadata.title) metaTitle = metadata.title;
+            if (metadata.artist) metaArtist = metadata.artist;
+            if (metadata.lyrics) embeddedLyrics = metadata.lyrics;
+
+            // Update the playlist item in place (optional, for caching in session)
+            item.title = metaTitle;
+            item.artist = metaArtist;
+
+            // Update Visuals
+            setSearchTitle(metaTitle || item.name);
+            setSearchArtist(metaArtist || "");
+        } catch (e) {
+            console.warn("Metadata parse failed", e);
+        }
+
         if (item.lyricFile) {
             // Local file mode
             try {
                 const text = await item.lyricFile.text();
-                // Check if song changed while reading file (rare but possible)
-                // For local files it's fast, but consistent logic is good.
-
                 const parser = new StandardLrcParser();
                 const parsedLyrics = parser.parse(text);
-                // Inject metadata
                 parsedLyrics.metadata = parsedLyrics.metadata || {};
                 parsedLyrics.metadata['source'] = 'Local File';
-                parsedLyrics.metadata['title'] = item.title || '';
-                parsedLyrics.metadata['artist'] = item.artist || '';
+                parsedLyrics.metadata['title'] = metaTitle || '';
+                parsedLyrics.metadata['artist'] = metaArtist || '';
 
-                if (signature === currentSongSignature) {
-                    // Wait, we need to read the state ref.. 
-                    // actually closure captures old signature? No, `signature` is local const.
-                    // But we need to compare against LATEST state.
-                    // The state update `setCurrentSongSignature` is async, so `currentSongSignature` in closure is old.
-                    // BUT, we defined `signature` right here. 
-                    // We need a ref to track "latest request signature" to compare against.
-                    // OR, `handleSearchForTrack` passes the signature.
+                if (signature === currentSongSignature || true) {
                     setLyrics(parsedLyrics);
                     setStatusMsg("Loaded local lyrics.");
                 }
@@ -183,8 +196,8 @@ export default function App() {
                 setStatusMsg("Error parsing local lyrics.");
             }
         } else {
-            // Try to search online
-            handleSearchForTrack(item, signature);
+            // Try to search online (or use embedded if available via manager)
+            handleSearchForTrack({ ...item, title: metaTitle, artist: metaArtist }, signature, embeddedLyrics || undefined);
         }
     };
 
@@ -219,14 +232,16 @@ export default function App() {
             setStatusMsg("Format not native. Transcoding with FFmpeg...");
             setIsConverting(true);
             try {
-                const wavBlob = await converter.convertToWav(currentItem.audioFile);
-                const wavUrl = URL.createObjectURL(wavBlob);
+                const result = await converter.convertToWav(currentItem.audioFile);
+                const wavUrl = URL.createObjectURL(result.blob);
                 setAudioSrc(wavUrl);
                 setStatusMsg("Transcoding complete. Playing...");
                 if (audioRef.current) {
                     audioRef.current.load();
                     audioRef.current.play();
                 }
+                // Note: Lyrics are already loaded by playTrack via MetadataService
+                // No need to reload from FFmpeg - this caused duplicate lyrics
             } catch (err) {
                 console.error("FFmpeg conversion failed", err);
                 setStatusMsg("Transcoding failed. " + err);
@@ -321,16 +336,17 @@ export default function App() {
     };
 
     // New Helper
-    const handleSearchForTrack = async (item: PlaylistItem, signature: string) => {
+    const handleSearchForTrack = async (item: PlaylistItem, signature: string, embeddedLyrics?: string) => {
         if (!item.title) return;
-        setStatusMsg("Searching online for lyrics...");
+        setStatusMsg("Loading lyrics...");
         const song: SongInformation = {
             title: item.title,
             artists: item.artist ? [item.artist] : [],
             album: "",
             duration: 0,
             sourceId: "local_auto",
-            persistenceId: item.name // Use filename as stable ID
+            persistenceId: item.name, // Use filename as stable ID,
+            lyrics: embeddedLyrics
         };
 
         // We use a ref to track active request? 
@@ -351,7 +367,12 @@ export default function App() {
 
         if (success) {
             setLyrics(manager.getCurrentLyrics());
-            setStatusMsg("Lyrics found online!");
+            const current = manager.getCurrentLyrics();
+            if (current?.metadata?.['source'] === 'Embedded (ID3)') {
+                setStatusMsg("Loaded embedded lyrics.");
+            } else {
+                setStatusMsg("Lyrics found online!");
+            }
         } else {
             setStatusMsg("No lyrics found.");
         }

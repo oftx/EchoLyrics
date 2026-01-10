@@ -19,6 +19,11 @@ export interface SongInformation {
      */
     album: string;
 
+    /**
+     * Embedded lyrics text (if available from metadata)
+     */
+    lyrics?: string;
+
     /** 
      * Track duration in milliseconds. 
      * Spec 2.1 mentions TimeSpan/long, here simplified to number (ms) for JS/TS.

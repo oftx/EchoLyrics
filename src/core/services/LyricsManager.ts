@@ -88,20 +88,63 @@ export class LyricsManager {
         // But if they search manually, they want to see the LIST.
         // So if ignoreCache is true, we skip auto-selecting the saved result.
 
+        // 1. Check for Embedded Lyrics (Priority 1)
+        if (song.lyrics) {
+            Logger.info(`[LyricsManager] Found embedded lyrics for ${song.title}`);
+            const embeddedResult: import("../interfaces/LyricResult").LyricResult = {
+                id: "embedded_" + Date.now(),
+                lyricText: song.lyrics,
+                source: "Embedded (ID3)",
+                score: 100,
+                title: song.title,
+                artist: song.artists.join(", "),
+                duration: song.duration
+            };
+
+            // If forcing search (ignoreCache), we just add it to candidates list below.
+            // But if NOT forcing search, and we have no other persistent selection, we Auto-Select this.
+
+            if (!options?.ignoreCache) {
+                // Check persistent selection
+                const cachedEntry = cache[persistenceKey];
+                if (!cachedEntry || !cachedEntry.selectedId) {
+                    // No user override -> Use Embedded
+                    this.lastResults = [embeddedResult];
+                    return this.selectLyric(0, false);
+                }
+            }
+
+            // If we fall through, we will search, but we want this embedded result in the list.
+            // We'll add it to 'results' after search completions or prepend it.
+        }
+
         if (!options?.ignoreCache) {
             const cachedEntry = cache[persistenceKey];
             if (cachedEntry && cachedEntry.selectedId) {
                 // We have a specific saved choice for this FILE.
-                // We typically need the list of results to select from.
-                // WE should store the RESULTS with the selection? Or look them up?
-                // Our current cache structure is { results: [], selectedId: ... } keyed by PersistenceKey.
-                // If we used the PersistenceKey to store results of the INITIAL auto-search, that's fine.
-                // But if we switched to Manual Search, the results associated with PersistenceKey might be old?
-                // NO, when we selectManual, we save those results to PersistenceKey.
-
-                // So: If there is a cached entry for PersistenceKey, it contains the "Accepted Results" and "Selected ID".
                 Logger.info(`[LyricsManager] Found persistent entry for ${persistenceKey}`);
-                this.lastResults = cachedEntry.results;
+
+                // IMPORTANT: Always ensure embedded lyrics are in the list!
+                let restoredResults = [...cachedEntry.results];
+
+                // Check if embedded lyrics already in the list
+                const hasEmbedded = restoredResults.some(r => r.source === "Embedded (ID3)");
+
+                if (song.lyrics && !hasEmbedded) {
+                    Logger.info(`[LyricsManager] Prepending embedded lyrics to cached results`);
+                    const embeddedResult: import("../interfaces/LyricResult").LyricResult = {
+                        id: "embedded_" + song.persistenceId,
+                        lyricText: song.lyrics,
+                        source: "Embedded (ID3)",
+                        score: 100,
+                        title: song.title,
+                        artist: song.artists.join(", "),
+                        duration: song.duration
+                    };
+                    restoredResults.unshift(embeddedResult);
+                }
+
+                this.lastResults = restoredResults;
 
                 const idx = this.lastResults.findIndex(r => r.id === cachedEntry.selectedId);
                 if (idx !== -1) {
@@ -132,6 +175,19 @@ export class LyricsManager {
 
         // 3. Perform Actual Search
         const results = await this.searcher.search(song, limit);
+        if (song.lyrics) {
+            const embeddedResult: import("../interfaces/LyricResult").LyricResult = {
+                id: "embedded_" + Date.now(),
+                lyricText: song.lyrics,
+                source: "Embedded (ID3)",
+                score: 100,
+                title: song.title,
+                artist: song.artists.join(", "),
+                duration: song.duration
+            };
+            results.unshift(embeddedResult);
+        }
+
         this.lastResults = results;
 
         Logger.info(`[LyricsManager] Search returned ${results.length} candidates.`);

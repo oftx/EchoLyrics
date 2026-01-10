@@ -17,8 +17,11 @@
     "@ffmpeg/core": "^0.12.10",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
+    "buffer": "^6.0.3",
     "file-saver": "^2.0.5",
     "jszip": "^3.10.1",
+    "music-metadata": "^11.10.5",
+    "process": "^0.11.10",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },
