@@ -221,8 +221,8 @@ export class LyricsManager {
             data.metadata = {};
         }
         data.metadata['source'] = best.source;
-        data.metadata['title'] = best.title || ""; // update meta
-        data.metadata['artist'] = best.artist || "";
+        data.metadata['title'] = data.metadata['title'] || best.title || ""; // update meta
+        data.metadata['artist'] = data.metadata['artist'] || best.artist || "";
         this.currentLyrics = data;
 
         if (saveSelection && this.currentSongKey && best.id) {
