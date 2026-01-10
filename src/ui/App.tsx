@@ -25,6 +25,16 @@ const metadataService = new MetadataService();
 // manager.getSearcher().registerProvider(new MockNetworkProvider());
 manager.getSearcher().registerProvider(new NeteaseNetworkProvider());
 
+// Helper function to format time as mm:ss
+const formatTime = (seconds: number): string => {
+    if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) {
+        return '0:00';
+    }
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
 export default function App() {
     const [lyrics, setLyrics] = useState<LyricsData | null>(null);
     const [currentTime, setCurrentTime] = useState(0);
@@ -48,12 +58,16 @@ export default function App() {
     const [searchLimit, setSearchLimit] = useState(15);
     const [statusMsg, setStatusMsg] = useState("");
     const [logs, setLogs] = useState<LogEntry[]>([]);
-    const [isHoveringLyrics, setIsHoveringLyrics] = useState(false);
     const [showExportModal, setShowExportModal] = useState(false);
     const [isConverting, setIsConverting] = useState(false);
+    const [showLogs, setShowLogs] = useState(false);
+    const [useNativePlayer, setUseNativePlayer] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [audioDuration, setAudioDuration] = useState(0);
 
     const audioRef = useRef<HTMLAudioElement>(null);
     const lyricsContainerRef = useRef<HTMLDivElement>(null);
+    const pipContainerRef = useRef<HTMLDivElement>(null);
     const logContainerRef = useRef<HTMLDivElement>(null);
 
     // Subscribe to Logger
@@ -139,6 +153,9 @@ export default function App() {
         setLyrics(null);
         setCurrentTime(0);
         setIsConverting(false); // Reset
+        setActiveLineIndex(-1);
+        if (lyricsContainerRef.current) lyricsContainerRef.current.scrollTo(0, 0);
+        if (pipContainerRef.current) pipContainerRef.current.scrollTo(0, 0);
 
         // Load Audio
         const url = URL.createObjectURL(item.audioFile);
@@ -184,8 +201,8 @@ export default function App() {
                 const parsedLyrics = parser.parse(text);
                 parsedLyrics.metadata = parsedLyrics.metadata || {};
                 parsedLyrics.metadata['source'] = 'Local File';
-                parsedLyrics.metadata['title'] = metaTitle || '';
-                parsedLyrics.metadata['artist'] = metaArtist || '';
+                parsedLyrics.metadata['title'] = parsedLyrics.metadata['title'] || metaTitle || '';
+                parsedLyrics.metadata['artist'] = parsedLyrics.metadata['artist'] || metaArtist || '';
 
                 if (signature === currentSongSignature || true) {
                     setLyrics(parsedLyrics);
@@ -444,257 +461,352 @@ export default function App() {
         }
     };
 
-    // Auto-scroll effect
-    useEffect(() => {
-        if (activeLineIndex !== -1 && lyricsContainerRef.current) {
-            const container = lyricsContainerRef.current;
-            const linesWrapper = container.firstElementChild as HTMLElement;
-            if (linesWrapper && linesWrapper.children[activeLineIndex]) {
-                const activeEl = linesWrapper.children[activeLineIndex] as HTMLElement;
-                const containerHeight = container.clientHeight;
-                const elementTop = activeEl.offsetTop;
-                const elementHeight = activeEl.clientHeight;
 
-                container.scrollTo({
-                    top: elementTop - containerHeight / 2 + elementHeight / 2,
-                    behavior: 'smooth'
-                });
-            }
-        }
-    }, [activeLineIndex]);
 
     return (
-        <div className="app-container" style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', textAlign: 'center' }}>
-            <h1>Echo Lyrics</h1>
+        <div className="app-container">
+            <header className="app-header">
+                <h1 className="app-title">Echo Lyrics</h1>
+            </header>
 
-
-            {/* Folder Input */}
-            <div style={{ marginBottom: '20px', border: '1px dashed #666', padding: '10px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', color: '#888' }}>
-                    Select Music Folder
+            {/* Folder Input - Only show if no playlist */}
+            {playlist.length === 0 && (
+                <label className="upload-zone">
+                    <span className="upload-zone-label">Select Music Folder</span>
+                    <span className="upload-zone-trigger btn btn-secondary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                        Choose Files
+                    </span>
+                    <input
+                        type="file"
+                        // @ts-expect-error webkitdirectory is not standard
+                        webkitdirectory=""
+                        directory=""
+                        onChange={handleFolderSelect}
+                        multiple
+                    />
                 </label>
-                <input
-                    type="file"
-                    // @ts-expect-error webkitdirectory is not standard
-                    webkitdirectory=""
-                    directory=""
-                    onChange={handleFolderSelect}
-                    multiple
-                />
-            </div>
+            )}
 
-            {/* Playlist UI */}
-            {
-                playlist.length > 0 && (
-                    <div className="playlist" style={{
-                        maxHeight: '150px',
-                        overflowY: 'auto',
-                        marginBottom: '20px',
-                        border: '1px solid #444',
-                        background: '#1a1a1a',
-                        textAlign: 'left'
-                    }}>
+            {/* Playlist UI with header */}
+            {playlist.length > 0 && (
+                <div className="playlist-section">
+                    <div className="playlist-header">
+                        <span className="playlist-count">{playlist.length} songs</span>
+                        <label className="btn btn-ghost btn-sm">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="17 8 12 3 7 8" />
+                                <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                            Change Folder
+                            <input
+                                type="file"
+                                // @ts-expect-error webkitdirectory is not standard
+                                webkitdirectory=""
+                                directory=""
+                                onChange={handleFolderSelect}
+                                multiple
+                                style={{ display: 'none' }}
+                            />
+                        </label>
+                    </div>
+                    <div className="playlist">
                         {playlist.map((item, idx) => (
                             <div
                                 key={idx}
                                 onClick={() => playTrack(item, idx)}
-                                style={{
-                                    padding: '5px 10px',
-                                    cursor: 'pointer',
-                                    background: idx === currentIndex ? '#333' : 'transparent',
-                                    color: idx === currentIndex ? '#fff' : '#aaa',
-                                    borderBottom: '1px solid #222'
-                                }}
+                                className={`playlist-item ${idx === currentIndex ? 'playlist-item--active' : ''}`}
                             >
-                                <span style={{ marginRight: '10px' }}>{idx + 1}.</span>
-                                {item.name}
-                                {item.lyricFile && <span style={{ float: 'right', fontSize: '0.8em', color: '#4caf50' }}>LRC</span>}
+                                <span className="playlist-item-index">{idx + 1}.</span>
+                                <span className="playlist-item-name">{item.name}</span>
+                                {item.lyricFile && <span className="playlist-item-badge">LRC</span>}
                             </div>
                         ))}
                     </div>
-                )
-            }
+                </div>
+            )}
 
-            {/* Controls */}
-            {
-                audioSrc && (
-                    <div style={{ marginBottom: '10px' }}>
-                        <button onClick={handlePrev} disabled={currentIndex <= 0}>Prev</button>
-                        <button onClick={handleNext} disabled={currentIndex >= playlist.length - 1} style={{ marginLeft: '10px' }}>Next</button>
-                    </div>
-                )
-            }
+            {/* Playback Controls */}
+            {audioSrc && (
+                <div className="controls-bar">
+                    <button className="btn btn-secondary" onClick={handlePrev} disabled={currentIndex <= 0}>
+                        ← Prev
+                    </button>
+                    <button className="btn btn-secondary" onClick={handleNext} disabled={currentIndex >= playlist.length - 1}>
+                        Next →
+                    </button>
+                </div>
+            )}
 
             {/* Search Controls */}
-            <div className="search-controls" style={{ marginBottom: '20px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <div className="search-controls">
                 <input
                     type="text"
+                    className="input"
                     placeholder="Title"
                     value={searchTitle}
                     onChange={e => setSearchTitle(e.target.value)}
-                    style={{ padding: '5px' }}
                 />
                 <input
                     type="text"
+                    className="input"
                     placeholder="Artist"
                     value={searchArtist}
                     onChange={e => setSearchArtist(e.target.value)}
-                    style={{ padding: '5px' }}
                 />
-                <input
-                    type="number"
-                    placeholder="Limit"
-                    value={searchLimit}
-                    onChange={e => setSearchLimit(parseInt(e.target.value) || 15)}
-                    style={{ padding: '5px', width: '60px' }}
-                    title="Result Limit"
-                />
-                <button onClick={handleSearch}>Search Lyrics</button>
-                <button onClick={() => setShowExportModal(true)} style={{ marginLeft: '10px' }}>Export Lyrics</button>
+                <div className="number-stepper">
+                    <button
+                        type="button"
+                        className="number-stepper-btn"
+                        onClick={() => setSearchLimit(Math.max(1, searchLimit - 1))}
+                    >
+                        −
+                    </button>
+                    <input
+                        type="text"
+                        className="number-stepper-input"
+                        value={searchLimit}
+                        onChange={e => {
+                            const val = parseInt(e.target.value);
+                            if (!isNaN(val) && val > 0) setSearchLimit(val);
+                        }}
+                    />
+                    <button
+                        type="button"
+                        className="number-stepper-btn number-stepper-btn--plus"
+                        onClick={() => setSearchLimit(searchLimit + 1)}
+                    >
+                        +
+                    </button>
+                </div>
+                <button className="btn btn-primary" onClick={handleSearch}>Search Lyrics</button>
+                <button className="btn btn-ghost" onClick={() => setShowExportModal(true)}>Export Lyrics</button>
             </div>
 
-            <div style={{ color: '#aaa', marginBottom: '10px' }}>
-                {statusMsg}
+            {/* Status Bar */}
+            <div className="status-bar">
+                <span>{statusMsg}</span>
                 {lyrics && lyrics.metadata && lyrics.metadata['source'] && (
                     <>
-                        <span style={{ marginLeft: '10px', fontSize: '0.8em', color: '#666', border: '1px solid #444', padding: '2px 6px', borderRadius: '4px' }}>
+                        <span className="status-badge">
                             Source: {lyrics.metadata['source']}
                         </span>
-                        <button
-                            onClick={handleShowCandidates}
-                            style={{ marginLeft: '10px', fontSize: '0.8em', background: '#333', border: '1px solid #555', color: '#ccc', cursor: 'pointer' }}
-                        >
+                        <button className="btn btn-ghost btn-sm" onClick={handleShowCandidates}>
                             Switch Lyrics
                         </button>
-
                     </>
                 )}
             </div>
 
             {/* Candidates Modal/Overlay */}
-            {
-                showCandidates && (
+            {showCandidates && (
+                <div className="modal-overlay" onClick={() => setShowCandidates(false)}>
                     <div
-                        onClick={() => setShowCandidates(false)}
-                        style={{
-                            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-                            background: 'rgba(0,0,0,0.5)', zIndex: 999
-                        }}
+                        className="modal-content modal-content--candidates"
+                        onClick={(e) => e.stopPropagation()}
                     >
-                        <div
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                                position: 'fixed', top: '20%', left: '50%', transform: 'translate(-50%, 0)',
-                                background: '#222', border: '1px solid #666', padding: '20px', zIndex: 1000,
-                                width: '300px', maxHeight: '400px', overflowY: 'auto',
-                                borderRadius: '8px', boxShadow: '0 4px 10px rgba(0,0,0,0.5)'
-                            }}
-                        >
-                            <h3 style={{ marginTop: 0 }}>Select Lyrics</h3>
-                            {/* <button onClick={() => setShowCandidates(false)} style={{ float: 'right' }}>X</button> */}
-                            <div style={{ marginTop: '10px' }}>
-                                {candidates.map((cand, idx) => (
-                                    <div
-                                        key={idx}
-                                        onClick={() => handleSelectCandidate(idx)}
-                                        style={{ padding: '8px', borderBottom: '1px solid #333', cursor: 'pointer', textAlign: 'left' }}
-                                    >
-                                        <div style={{ fontWeight: 'bold' }}>{cand.title}</div>
-                                        <div style={{ fontSize: '0.8em', color: '#888' }}>{cand.artist}</div>
-                                        <div style={{ fontSize: '0.7em', color: '#555' }}>{cand.source}</div>
-                                    </div>
-                                ))}
-                            </div>
+                        <div className="modal-header">
+                            <h3 className="modal-title">Select Lyrics</h3>
+                        </div>
+                        <div className="modal-body">
+                            {candidates.map((cand, idx) => (
+                                <div
+                                    key={idx}
+                                    onClick={() => handleSelectCandidate(idx)}
+                                    className="candidate-item"
+                                >
+                                    <div className="candidate-title">{cand.title}</div>
+                                    <div className="candidate-artist">{cand.artist}</div>
+                                    <div className="candidate-source">{cand.source}</div>
+                                </div>
+                            ))}
                         </div>
                     </div>
-                )
-            }
-
-            {/* Native Audio Player */}
-            {
-                audioSrc && (
-                    <div style={{ marginBottom: '20px' }}>
-                        <audio
-                            ref={audioRef}
-                            src={audioSrc}
-                            controls
-                            autoPlay
-                            style={{ width: '100%' }}
-                            onTimeUpdate={handleTimeUpdate}
-                            onEnded={handleAudioEnded}
-                            onError={handleAudioError}
-                        />
-                    </div>
-                )
-            }
-
-            {/* Manual Controls (Optional, synced with audio) */}
-            {
-                !audioSrc && (
-                    <div className="controls">
-                        <p>Select a music file to start.</p>
-                    </div>
-                )
-            }
-
-            {/* Logs Viewer (New) */}
-            <div className="log-viewer" style={{
-                marginBottom: '20px',
-                textAlign: 'left',
-                border: '1px solid #333',
-                background: '#111',
-                padding: '10px',
-                borderRadius: '4px'
-            }}>
-                <div style={{ fontSize: '0.8em', color: '#888', borderBottom: '1px solid #333', marginBottom: '5px', paddingBottom: '2px' }}>
-                    Application Logs (Latest 100)
                 </div>
+            )}
+
+            {/* Audio Player */}
+            {audioSrc && (
+                <div className="audio-player-wrapper">
+                    <audio
+                        ref={audioRef}
+                        src={audioSrc}
+                        controls={useNativePlayer}
+                        autoPlay
+                        onTimeUpdate={handleTimeUpdate}
+                        onEnded={handleAudioEnded}
+                        onError={handleAudioError}
+                        onLoadedMetadata={() => setAudioDuration(audioRef.current?.duration || 0)}
+                        onPlay={() => setIsPlaying(true)}
+                        onPause={() => setIsPlaying(false)}
+                        style={{ display: useNativePlayer ? 'block' : 'none', width: '100%' }}
+                    />
+                    {!useNativePlayer && (
+                        <div className="custom-player">
+                            <button
+                                className="custom-player-btn custom-player-btn--play"
+                                onClick={() => {
+                                    if (audioRef.current?.paused) {
+                                        audioRef.current.play();
+                                    } else {
+                                        audioRef.current?.pause();
+                                    }
+                                }}
+                            >
+                                {isPlaying ? (
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <rect x="6" y="4" width="4" height="16" rx="1" />
+                                        <rect x="14" y="4" width="4" height="16" rx="1" />
+                                    </svg>
+                                ) : (
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36a1 1 0 00-1.5.86z" />
+                                    </svg>
+                                )}
+                            </button>
+                            <span className="custom-player-time">
+                                {formatTime(currentTime / 1000)} / {formatTime(audioDuration)}
+                            </span>
+                            <input
+                                type="range"
+                                className="custom-player-progress"
+                                min={0}
+                                max={audioDuration || 100}
+                                value={currentTime / 1000}
+                                onChange={(e) => {
+                                    if (audioRef.current) {
+                                        audioRef.current.currentTime = parseFloat(e.target.value);
+                                    }
+                                }}
+                            />
+                            <button
+                                className="custom-player-btn"
+                                onClick={() => {
+                                    if (audioRef.current) {
+                                        audioRef.current.muted = !audioRef.current.muted;
+                                    }
+                                }}
+                            >
+                                🔊
+                            </button>
+                        </div>
+                    )}
+                    <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setUseNativePlayer(!useNativePlayer)}
+                        style={{ marginLeft: 'var(--space-2)', fontSize: 'var(--text-xs)' }}
+                    >
+                        {useNativePlayer ? 'Custom Player' : 'Native Player'}
+                    </button>
+                </div>
+            )}
+
+            {/* Empty State */}
+            {!audioSrc && (
+                <div className="card text-center" style={{ padding: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>
+                    <p className="text-muted">Select a music folder to start playing.</p>
+                </div>
+            )}
+
+            {/* Logs Viewer - Collapsible */}
+            <div className={`log-panel ${showLogs ? 'log-panel--open' : 'log-panel--closed'}`}>
                 <div
-                    ref={logContainerRef}
-                    style={{ maxHeight: '150px', overflowY: 'auto', fontFamily: 'monospace', fontSize: '12px' }}
+                    className="log-panel-header"
+                    onClick={() => setShowLogs(!showLogs)}
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
                 >
-                    {logs.map((log, i) => (
-                        <div key={i} style={{ color: log.level === 'error' ? '#f44336' : log.level === 'warn' ? '#ff9800' : '#8bc34a', marginBottom: '2px' }}>
-                            <span style={{ color: '#555', marginRight: '5px' }}>[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                            <span style={{ fontWeight: 'bold', marginRight: '5px' }}>[{log.level.toUpperCase()}]</span>
-                            {log.message}
-                            {log.data && <span style={{ color: '#aaa', marginLeft: '5px' }}>{JSON.stringify(log.data)}</span>}
-                        </div>
-                    ))}
-                    {logs.length === 0 && <div style={{ color: '#555', fontStyle: 'italic' }}>No logs yet...</div>}
+                    <span>{showLogs ? '▼' : '▶'} Application Logs</span>
+                    <span className="text-muted" style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)' }}>
+                        {logs.length} entries
+                    </span>
                 </div>
+                {showLogs && (
+                    <div ref={logContainerRef} className="log-panel-content">
+                        {logs.map((log, i) => (
+                            <div key={i} className="log-entry">
+                                <span className="log-time">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                                <span className={`log-level log-level--${log.level}`}>[{log.level.toUpperCase()}]</span>
+                                <span className="log-message">
+                                    {log.message}
+                                    {log.data && <span className="log-data"> {JSON.stringify(log.data)}</span>}
+                                </span>
+                            </div>
+                        ))}
+                        {logs.length === 0 && <div className="log-empty">No logs yet...</div>}
+                    </div>
+                )}
             </div>
 
+            {/* Song Info Header */}
+            {audioSrc && (
+                <div className="song-info">
+                    <h2 className="song-title">{lyrics?.metadata?.title || searchTitle || 'Unknown Title'}</h2>
+                    <p className="song-artist">{lyrics?.metadata?.artist || searchArtist || 'Unknown Artist'}</p>
+                </div>
+            )}
+
+            {/* Divider Line */}
+
+
             {/* Lyrics View - Rendered conditionally into PiP or Main */}
-            {
-                pipWindow ? (
-                    createPortal(
-                        <div className="no-scrollbar" style={{
-                            height: '100vh',
-                            width: '100%',
-                            background: '#000',
-                            color: '#fff',
-                            overflowY: 'auto',
-                            padding: '20px',
-                            boxSizing: 'border-box'
-                        }}>
-                            <h2 style={{ fontSize: '1rem', textAlign: 'center', marginBottom: '5px' }}>
+            {pipWindow ? (
+                createPortal(
+                    <div className="no-scrollbar" ref={pipContainerRef} style={{
+                        height: '100vh',
+                        width: '100%',
+                        background: 'var(--bg-base)',
+                        color: 'var(--text-primary)',
+                        overflowY: 'auto',
+                        padding: 'var(--space-5)',
+                        boxSizing: 'border-box'
+                    }}>
+                        <div className="pip-header">
+                            <h2 className="pip-title">
                                 {lyrics?.metadata?.title || searchTitle || "Lyrics"}
                             </h2>
-                            <div style={{ fontSize: '0.9rem', textAlign: 'center', marginBottom: '15px', color: '#aaa' }}>
+                            <div className="pip-artist">
                                 {lyrics?.metadata?.artist || searchArtist || ""}
                             </div>
-                            {/* We reuse the Logic for displaying lyrics but we need to pass the same internal structure. 
-                            Since the Lyrics rendering logic is embedded in JSX below, I should probably extract it to a component.
-                            But for this 'refactor-less' approach, I will duplicate the render logic OR wrap it.
-                            Wrapping in a const is best.
-                        */}
-                            {/* 
-                            Actually, extracting the Lyrics list to a component is cleaner but I'll stick to a shared render function variable
-                            if possible, or just duplicate the simple list for now to stay fast.
-                            The list logic relies on references for scrolling (`lyricsContainerRef`).
-                            If we move to PiP, we need a NEW Ref for the PiP container.
-                         */}
+                        </div>
+                        {lyrics ? (
+                            <LyricsList
+                                lyrics={lyrics}
+                                activeLineIndex={activeLineIndex}
+                                currentTime={currentTime}
+                                autoScroll={true}
+                                onLineClick={handleLyricClick}
+                            />
+                        ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
+                    </div>,
+                    pipWindow.document.body
+                )
+            ) : null}
+
+            {/* Main Lyrics View */}
+            <div
+                className="lyrics-container"
+            >
+                {pipWindow ? (
+                    <div className="lyrics-pip-message">
+                        <p>Lyrics are displayed in the pop-out window.</p>
+                        <button className="btn btn-secondary" onClick={togglePiP}>
+                            Restore Lyrics to Main Window
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        <button
+                            className="btn btn-ghost btn-sm lyrics-popout-btn"
+                            onClick={togglePiP}
+                        >
+                            Pop Out Lyrics
+                        </button>
+                        <div className="lyrics-scroller no-scrollbar" ref={lyricsContainerRef}>
                             {lyrics ? (
                                 <LyricsList
                                     lyrics={lyrics}
@@ -703,68 +815,8 @@ export default function App() {
                                     autoScroll={true}
                                     onLineClick={handleLyricClick}
                                 />
-                            ) : <div style={{ textAlign: 'center', marginTop: '50%' }}>No Lyrics Loaded</div>}
-                        </div>,
-                        pipWindow.document.body
-                    )
-                ) : null
-            }
-
-            {/* Main Lyrics View */}
-            <div
-                className="lyrics-view no-scrollbar"
-                ref={lyricsContainerRef}
-                onMouseEnter={() => setIsHoveringLyrics(true)}
-                onMouseLeave={() => setIsHoveringLyrics(false)}
-                style={{
-                    marginTop: '20px',
-                    height: '400px',
-                    overflowY: 'auto',
-                    border: '1px solid #444',
-                    background: '#1a1a1a',
-                    padding: '20px',
-                    borderRadius: '8px',
-                    position: 'relative'
-                }}
-            >
-                {pipWindow ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
-                        <p>Lyrics are displayed in the pop-out window.</p>
-                        <button onClick={togglePiP} className="restore-btn">
-                            Restore Lyrics to Main Window
-                        </button>
-                    </div>
-                ) : (
-                    <>
-                        {isHoveringLyrics && (
-                            <button
-                                onClick={togglePiP}
-                                style={{
-                                    position: 'absolute',
-                                    top: '10px',
-                                    right: '10px',
-                                    zIndex: 10,
-                                    padding: '5px 10px',
-                                    background: 'rgba(0,0,0,0.7)',
-                                    border: '1px solid #666',
-                                    color: '#fff',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.8em'
-                                }}
-                            >
-                                Pop Out Lyrics
-                            </button>
-                        )}
-                        {lyrics ? (
-                            <LyricsList
-                                lyrics={lyrics}
-                                activeLineIndex={activeLineIndex}
-                                currentTime={currentTime}
-                                autoScroll={false}
-                                onLineClick={handleLyricClick}
-                            />
-                        ) : <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#555' }}>No Lyrics Loaded</div>}
+                            ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
+                        </div>
                     </>
                 )}
             </div>
@@ -794,7 +846,9 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, onLineCl
 
     useEffect(() => {
         if (autoScroll && activeLineIndex !== -1 && containerRef.current) {
-            const activeEl = containerRef.current.children[activeLineIndex] as HTMLElement;
+            // Use data-index to find the specific element corresponding to the active line index
+            // This is robust against skipped/null lines not being rendered in the DOM
+            const activeEl = containerRef.current.querySelector(`[data-index="${activeLineIndex}"]`) as HTMLElement;
             if (activeEl) {
                 activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
@@ -802,50 +856,39 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, onLineCl
     }, [activeLineIndex, autoScroll]);
 
     return (
-        <div ref={containerRef} style={{ position: 'relative', minHeight: '100%' }}>
+        <div ref={containerRef} className="lyrics-content">
             {lyrics.lines.map((line, idx) => {
+                // Skip empty lines
+                const lineText = line.syllables
+                    ? line.syllables.map(s => s.text).join('').trim()
+                    : (line.text || '').trim();
+                if (!lineText) return null;
+
                 const isActive = idx === activeLineIndex;
                 return (
                     <div
                         key={idx}
+                        data-index={idx}
                         onClick={() => onLineClick && onLineClick(line.startTime)}
-                        style={{
-                            margin: '14px 0',
-                            color: isActive ? '#4caf50' : '#888',
-                            fontWeight: isActive ? 'bold' : 'normal',
-                            fontSize: isActive ? '1.3em' : '1em',
-                            transition: 'all 0.2s ease',
-                            transform: isActive ? 'scale(1.05)' : 'scale(1)',
-                            transformOrigin: 'center center',
-                            textAlign: 'center',
-                            cursor: 'pointer' // Add pointer cursor
-                        }}
+                        className={`lyric-line ${isActive ? 'lyric-line--active' : 'lyric-line--inactive'}`}
                     >
                         {line.syllables ? (
                             <div>
                                 {line.syllables.map((syl, sylIdx) => {
                                     const sylAbsStart = line.startTime + syl.startTime;
                                     const sylAbsEnd = sylAbsStart + syl.duration;
-                                    const isSylpassed = currentTime >= sylAbsEnd;
+                                    const isSylPassed = currentTime >= sylAbsEnd;
                                     const isSylActive = currentTime >= sylAbsStart && currentTime < sylAbsEnd;
 
-                                    let sylColor = 'inherit';
+                                    let sylClass = 'lyric-syllable';
                                     if (isActive) {
-                                        if (isSylpassed) sylColor = '#4caf50';
-                                        else if (isSylActive) sylColor = '#ffeb3b';
-                                        else sylColor = '#fff';
+                                        if (isSylPassed) sylClass += ' lyric-syllable--passed';
+                                        else if (isSylActive) sylClass += ' lyric-syllable--active';
+                                        else sylClass += ' lyric-syllable--upcoming';
                                     }
 
                                     return (
-                                        <span
-                                            key={sylIdx}
-                                            style={{
-                                                color: sylColor,
-                                                transition: 'color 0.05s linear',
-                                                marginRight: '4px',
-                                                display: 'inline-block'
-                                            }}
-                                        >
+                                        <span key={sylIdx} className={sylClass}>
                                             {syl.text}
                                         </span>
                                     );
