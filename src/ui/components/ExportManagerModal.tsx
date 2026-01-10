@@ -5,20 +5,24 @@ import { saveAs } from 'file-saver';
 import { SongInformation } from '../../core/interfaces/SongInformation';
 import { LyricsManager } from '../../core/services/LyricsManager';
 import { LyricResult } from '../../core/interfaces/LyricResult';
+import { MetadataService } from '../../core/services/MetadataService';
 
 interface ExportManagerModalProps {
     isOpen: boolean;
     onClose: () => void;
-    playlist: { name: string; title?: string; artist?: string; lyricFile?: File }[];
+    playlist: { name: string; title?: string; artist?: string; lyricFile?: File; audioFile: File }[];
     manager: LyricsManager;
 }
 
 interface ExportCandidate {
     index: number;
     song: SongInformation;
-    cacheStatus: 'ready' | 'missing';
+    cacheStatus: 'ready' | 'missing' | 'embedded';
     lyric: LyricResult | null;
     checked: boolean;
+    embeddedLyrics?: string;
+    metadataTitle?: string;
+    metadataArtist?: string;
 }
 
 export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, onClose, playlist, manager }) => {
@@ -31,10 +35,14 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
     useEffect(() => {
         if (!isOpen) return;
 
-        const loadCandidates = () => {
-            const newCandidates: ExportCandidate[] = playlist.map((item, idx) => {
+        const loadCandidates = async () => {
+            const metadataService = new MetadataService();
+            const newCandidates: ExportCandidate[] = [];
+
+            for (let idx = 0; idx < playlist.length; idx++) {
+                const item = playlist[idx];
                 const song: SongInformation = {
-                    title: item.title || "",
+                    title: item.title || item.name.replace(/\.[^/.]+$/, ''),
                     artists: item.artist ? [item.artist] : [],
                     album: "",
                     duration: 0,
@@ -42,15 +50,58 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
                     persistenceId: item.name
                 };
 
+                // Check cache first
                 const cached = manager.getLyricFromCache(song);
-                return {
-                    index: idx,
-                    song: song,
-                    cacheStatus: cached ? 'ready' : 'missing',
-                    lyric: cached,
-                    checked: !!cached // Default check if ready
-                };
-            });
+
+                if (cached) {
+                    newCandidates.push({
+                        index: idx,
+                        song: song,
+                        cacheStatus: 'ready',
+                        lyric: cached,
+                        checked: true,
+                        // For cached items, we don't strictly have the separate metadata handy unless we re-parse,
+                        // but the 'song' object itself is already constructed from metadata if available (cached song objects usually are).
+                        // However, strictly speaking, if it's cached, the 'Matched' columns will use the cached lyric info anyway.
+                        // If we want to show metadata fallback for Matched columns even when cached, we'd need to parse.
+                        // For optimization, we'll assume if it's cached, we rely on the cached matches.
+                    });
+                } else {
+                    // Try to get embedded lyrics and metadata from audio file
+                    let embeddedLyrics: string | undefined;
+                    let metaTitle: string | undefined;
+                    let metaArtist: string | undefined;
+                    try {
+                        const metadata = await metadataService.parse(item.audioFile);
+                        if (metadata.lyrics) {
+                            embeddedLyrics = metadata.lyrics;
+                        }
+                        // Get title/artist from metadata for export naming
+                        if (metadata.title) metaTitle = metadata.title;
+                        if (metadata.artist) metaArtist = metadata.artist;
+                    } catch (e) {
+                        // Ignore parsing errors
+                    }
+
+                    // Update song info with metadata (fallback to playlist item info, then filename)
+                    const updatedSong: SongInformation = {
+                        ...song,
+                        title: metaTitle || item.title || item.name.replace(/\.[^/.]+$/, ''),
+                        artists: metaArtist ? [metaArtist] : (item.artist ? [item.artist] : [])
+                    };
+
+                    newCandidates.push({
+                        index: idx,
+                        song: updatedSong,
+                        cacheStatus: embeddedLyrics ? 'embedded' : 'missing',
+                        lyric: null,
+                        checked: !!embeddedLyrics,
+                        embeddedLyrics: embeddedLyrics,
+                        metadataTitle: metaTitle,
+                        metadataArtist: metaArtist
+                    });
+                }
+            }
             setCandidates(newCandidates);
         };
 
@@ -85,20 +136,20 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
 
     const handleSelectReady = () => {
         setCandidates(prev => prev.map(c => {
-            // Only select if ready AND matches provider filter
+            // Select if ready or embedded AND matches provider filter (embedded always matches)
             const matchesProvider = providerFilter === "All" || (c.lyric?.source === providerFilter);
-            return { ...c, checked: c.cacheStatus === 'ready' && matchesProvider };
+            const isExportable = (c.cacheStatus === 'ready' && matchesProvider) || c.cacheStatus === 'embedded';
+            return { ...c, checked: isExportable };
         }));
     };
 
     const generateFilename = (song: SongInformation, lyric: LyricResult | null, index: number) => {
-        if (!lyric) return "unknown.lrc";
         let str = template;
         str = str.replace(/\$\{id\}/g, (index).toString().padStart(2, '0'));
         str = str.replace(/\$\{title\}/g, song.title || "Unknown");
         str = str.replace(/\$\{artist\}/g, (song.artists && song.artists[0]) || "Unknown");
-        str = str.replace(/\$\{lyricTitle\}/g, lyric.title || "Unknown");
-        str = str.replace(/\$\{lyricArtist\}/g, lyric.artist || "Unknown");
+        str = str.replace(/\$\{lyricTitle\}/g, lyric?.title || song.title || "Unknown");
+        str = str.replace(/\$\{lyricArtist\}/g, lyric?.artist || (song.artists && song.artists[0]) || "Unknown");
         // Sanitize
         return str.replace(/[<>:"/\\|?*]/g, "_") + ".lrc";
     };
@@ -111,12 +162,20 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
             let count = 0;
 
             for (const item of selected) {
-                if (item.cacheStatus === 'ready' && item.lyric) {
-                    // Check provider filter again just in case
-                    if (providerFilter !== "All" && item.lyric.source !== providerFilter) continue;
+                let lyricText: string | null = null;
 
+                if (item.cacheStatus === 'ready' && item.lyric) {
+                    // Check provider filter
+                    if (providerFilter !== "All" && item.lyric.source !== providerFilter) continue;
+                    lyricText = item.lyric.lyricText;
+                } else if (item.cacheStatus === 'embedded' && item.embeddedLyrics) {
+                    // Embedded lyrics bypass provider filter
+                    lyricText = item.embeddedLyrics;
+                }
+
+                if (lyricText) {
                     const filename = generateFilename(item.song, item.lyric, item.index + 1);
-                    zip.file(filename, item.lyric.lyricText);
+                    zip.file(filename, lyricText);
                     count++;
                 }
             }
@@ -141,99 +200,99 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
     if (!isOpen) return null;
 
     return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-            background: 'rgba(0,0,0,0.8)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center'
-        }}>
-            <div style={{
-                background: '#222', width: '90%', maxWidth: '900px', height: '80%', display: 'flex', flexDirection: 'column',
-                borderRadius: '8px', border: '1px solid #444', color: '#eee', padding: '20px'
-            }}>
-                <h2 style={{ marginTop: 0 }}>Export Lyrics</h2>
+        <div className="modal-overlay">
+            <div className="modal-content modal-content--export">
+                <div className="modal-header">
+                    <h2 className="modal-title">Export Lyrics</h2>
+                </div>
 
-                <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
-                        <label style={{ display: 'block', marginBottom: '5px' }}>Filename Template:</label>
-                        <input
-                            type="text"
-                            value={template}
-                            onChange={(e) => setTemplate(e.target.value)}
-                            style={{ padding: '5px', width: '100%', boxSizing: 'border-box' }}
-                        />
-                        <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
-                            Supported: {'${id}'}, {'${title}'}, {'${artist}'}, {'${lyricTitle}'}, {'${lyricArtist}'}
+                <div className="modal-body">
+                    <div style={{ display: 'flex', gap: 'var(--space-5)', marginBottom: 'var(--space-5)', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1 }}>
+                            <label className="input-label">Filename Template:</label>
+                            <input
+                                type="text"
+                                className="input"
+                                value={template}
+                                onChange={(e) => setTemplate(e.target.value)}
+                            />
+                            <div className="text-muted" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-1)' }}>
+                                Supported: {'${id}'}, {'${title}'}, {'${artist}'}, {'${lyricTitle}'}, {'${lyricArtist}'}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="input-label">Provider Filter:</label>
+                            <select
+                                value={providerFilter}
+                                onChange={e => setProviderFilter(e.target.value)}
+                                className="input select"
+                            >
+                                <option value="All">All Providers</option>
+                                <option value="Netease Cloud Music">Netease Cloud Music</option>
+                            </select>
                         </div>
                     </div>
-                    <div>
-                        <label style={{ display: 'block', marginBottom: '5px' }}>Provider Filter:</label>
-                        <select
-                            value={providerFilter}
-                            onChange={e => setProviderFilter(e.target.value)}
-                            style={{ marginLeft: '10px', padding: '5px' }}
-                        >
-                            <option value="All">All Providers</option>
-                            <option value="Netease Cloud Music">Netease Cloud Music</option>
-                            {/* Can add more if we had them */}
-                        </select>
+
+                    <div className="controls-bar" style={{ justifyContent: 'flex-start', marginBottom: 'var(--space-4)' }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => handleSelectAll(true)}>Select All</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => handleSelectAll(false)}>Select None</button>
+                        <button className="btn btn-ghost btn-sm" onClick={handleSelectReady}>Select Ready</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setCandidates(c => c.map(x => ({ ...x, checked: !x.checked })))}>Invert</button>
+                    </div>
+
+                    <div className="table-wrapper" style={{ flex: 1, overflowY: 'auto' }}>
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Select</th>
+                                    <th>Song</th>
+                                    <th>Artist</th>
+                                    <th>Matched Title</th>
+                                    <th>Matched Artist</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {displayedCandidates.map((c, idx) => {
+                                    const isReady = c.cacheStatus === 'ready';
+                                    const isEmbedded = c.cacheStatus === 'embedded';
+                                    const matchesProvider = c.isMatch;
+                                    const effectiveReady = (isReady && matchesProvider) || isEmbedded;
+                                    const statusClass = effectiveReady ? 'table-status--ready' : (isReady ? 'table-status--mismatch' : 'table-status--missing');
+                                    const statusText = isEmbedded ? 'Embedded' : (effectiveReady ? 'Ready' : (isReady ? 'Provider Mismatch' : 'Missing'));
+                                    return (
+                                        <tr key={idx}>
+                                            <td>{c.index + 1}</td>
+                                            <td>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={c.checked}
+                                                    onChange={() => handleToggle(idx)}
+                                                    disabled={!effectiveReady}
+                                                />
+                                            </td>
+                                            <td>{c.song.title}</td>
+                                            <td className="text-secondary">{c.song.artists[0]}</td>
+                                            <td className="text-muted">{c.lyric?.title || c.metadataTitle || ''}</td>
+                                            <td className="text-muted">{c.lyric?.artist || c.metadataArtist || ''}</td>
+                                            <td className={statusClass}>
+                                                {statusText}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                <div style={{ marginBottom: '10px' }}>
-                    <button onClick={() => handleSelectAll(true)}>Select All</button>
-                    <button onClick={() => handleSelectAll(false)} style={{ marginLeft: '10px' }}>Select None</button>
-                    <button onClick={handleSelectReady} style={{ marginLeft: '10px' }}>Select Ready & Matched</button>
-                    <button onClick={() => setCandidates(c => c.map(x => ({ ...x, checked: !x.checked })))} style={{ marginLeft: '10px' }}>Invert</button>
-                </div>
-
-                <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #444' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                        <thead style={{ background: '#333', position: 'sticky', top: 0 }}>
-                            <tr>
-                                <th style={{ padding: '8px', textAlign: 'left' }}>#</th>
-                                <th style={{ padding: '8px', textAlign: 'left' }}>Select</th>
-                                <th style={{ padding: '8px', textAlign: 'left' }}>Song</th>
-                                <th style={{ padding: '8px', textAlign: 'left' }}>Artist</th>
-                                <th style={{ padding: '8px', textAlign: 'left' }}>Matched Title</th>
-                                <th style={{ padding: '8px', textAlign: 'left' }}>Matched Artist</th>
-                                <th style={{ padding: '8px', textAlign: 'left' }}>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {displayedCandidates.map((c, idx) => {
-                                const isReady = c.cacheStatus === 'ready';
-                                const matchesProvider = c.isMatch;
-                                const effectiveReady = isReady && matchesProvider;
-                                return (
-                                    <tr key={idx} style={{ borderBottom: '1px solid #333', background: idx % 2 === 0 ? 'transparent' : '#2a2a2a' }}>
-                                        <td style={{ padding: '8px' }}>{c.index + 1}</td>
-                                        <td style={{ padding: '8px' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={c.checked}
-                                                onChange={() => handleToggle(idx)}
-                                                disabled={!effectiveReady}
-                                            />
-                                        </td>
-                                        <td style={{ padding: '8px' }}>{c.song.title}</td>
-                                        <td style={{ padding: '8px' }}>{c.song.artists[0]}</td>
-                                        <td style={{ padding: '8px', color: '#aaa' }}>{c.lyric?.title}</td>
-                                        <td style={{ padding: '8px', color: '#aaa' }}>{c.lyric?.artist}</td>
-                                        <td style={{ padding: '8px', color: effectiveReady ? '#4caf50' : '#f44336' }}>
-                                            {effectiveReady ? "Ready" : (isReady ? "Provider Mismatch" : "Missing")}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                    <button onClick={onClose} style={{ padding: '8px 20px', background: 'transparent', border: '1px solid #666', color: '#fff' }}>Close</button>
+                <div className="modal-footer">
+                    <button className="btn btn-ghost" onClick={onClose}>Close</button>
                     <button
+                        className="btn btn-primary"
                         onClick={handleExport}
                         disabled={isExporting}
-                        style={{ padding: '8px 20px', background: '#4caf50', border: 'none', color: '#fff', cursor: 'pointer' }}
                     >
                         {isExporting ? "Exporting..." : "Export Selection"}
                     </button>
