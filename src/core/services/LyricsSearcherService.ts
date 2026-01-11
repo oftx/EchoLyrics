@@ -15,28 +15,35 @@ export class LyricsSearcherService implements LyricsSearcher {
         this.providers.push(provider);
     }
 
-    public async search(song: SongInformation, limit: number = 15): Promise<LyricResult[]> {
+    public async search(song: SongInformation, limit: number = 15, onResult?: (results: LyricResult[]) => void): Promise<LyricResult[]> {
         // Spec 2.3.1.2: Multi-source concurrent search.
-        const searchTasks = this.providers.map(p =>
-            p.search(song, limit).catch(err => {
+        const searchTasks = this.providers.map(async (p) => {
+            try {
+                const results = await p.search(song, limit);
+                // Score immediately
+                results.forEach(res => {
+                    res.score = this.scoringService.calculateScore(song, res);
+                });
+
+                // Sort this partial batch (optional, but good for "best so far")
+                results.sort((a, b) => b.score - a.score);
+
+                // Notify callback if provided
+                if (onResult && results.length > 0) {
+                    onResult(results);
+                }
+
+                return results;
+            } catch (err) {
                 console.error(`Provider ${p.name} failed:`, err);
                 return [] as LyricResult[];
-            })
-        );
+            }
+        });
 
         const resultsOfResults = await Promise.all(searchTasks);
         let allResults = resultsOfResults.flat();
 
-        // Calculate scores
-        allResults.forEach(res => {
-            res.score = this.scoringService.calculateScore(song, res);
-        });
-
-        // Filter valid candidates (Threshold e.g. 60 from Spec 2.3.1.4)
-        // REMOVED THRESHOLD: Allow all results to pass through for "best guess" logic.
-        // allResults = allResults.filter(r => r.score >= 40);
-
-        // Sort by score descending
+        // Final Sort by score descending (to be sure)
         allResults.sort((a, b) => b.score - a.score);
 
         return allResults;

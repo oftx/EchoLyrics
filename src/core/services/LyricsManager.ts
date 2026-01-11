@@ -228,7 +228,40 @@ export class LyricsManager {
         }
 
         // 3. Perform Actual Search
-        const results = await this.searcher.search(song, limit);
+        const results = await this.searcher.search(song, limit, (incrementalResults) => {
+            Logger.info(`[LyricsManager] Received incremental results: ${incrementalResults.length}`);
+
+            // Merge into current results if we are still active on this song
+            if (this.currentSongKey !== persistenceKey) return;
+
+            // We need to merge incrementalResults into this.lastResults
+            // Deduplicate by ID?
+            const existingIds = new Set(this.lastResults.map(r => r.id));
+            const newOnes = incrementalResults.filter(r => !existingIds.has(r.id));
+
+            if (newOnes.length > 0) {
+                this.lastResults = [...this.lastResults, ...newOnes];
+                // Sort again
+                this.lastResults.sort((a, b) => b.score - a.score);
+
+                // Look for best candidate currently
+                // If we haven't selected anything yet (currentLyrics is null or placeholder?), or if we want to AUTO-SWITCH to a better one?
+                // Requirement: "Select highest score candidate in real time"
+
+                // We should probably only auto-switch if the new best score is significantly better 
+                // OR if we are currently using a "low quality" lyric.
+                // For now, let's aggressively select the best one if it's better than current.
+
+                const best = this.lastResults[0];
+                const currentScore = Number(this.currentLyrics?.metadata?.score || 0);
+                if (best && best.score > currentScore) {
+                    Logger.info(`[LyricsManager] Auto-selecting better candidate from stream: ${best.title} (${best.score})`);
+                    // We need to find the index in the new sorted array
+                    const idx = this.lastResults.indexOf(best);
+                    this.selectLyric(idx, true);
+                }
+            }
+        });
         if (song.lyrics) {
             const embeddedResult: import("../interfaces/LyricResult").LyricResult = {
                 id: "embedded_" + Date.now(),
@@ -288,6 +321,7 @@ export class LyricsManager {
             data.metadata = {};
         }
         data.metadata['source'] = best.source;
+        data.metadata['score'] = String(best.score); // Store score for comparison
         data.metadata['title'] = data.metadata['title'] || best.title || ""; // update meta
         data.metadata['artist'] = data.metadata['artist'] || best.artist || "";
         this.currentLyrics = data;

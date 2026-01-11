@@ -72,4 +72,25 @@ describe('LyricsSearcherService', () => {
         expect(results.length).toBeGreaterThan(0);
         expect(results[0].score).toBe(90);
     });
+    it('should stream results via callback', async () => {
+        const searcher = new LyricsSearcherService();
+        searcher.registerProvider(new MockNetworkProvider());
+
+        const song: SongInformation = {
+            title: "Hello",
+            artists: ["Adele"],
+            album: "25",
+            duration: 180000,
+            sourceId: "1"
+        };
+
+        const callbacks: number[] = [];
+        const results = await searcher.search(song, 15, (res) => {
+            callbacks.push(res.length);
+        });
+
+        expect(results.length).toBeGreaterThan(0);
+        expect(callbacks.length).toBeGreaterThan(0);
+        expect(callbacks[0]).toBeGreaterThan(0);
+    });
 });
