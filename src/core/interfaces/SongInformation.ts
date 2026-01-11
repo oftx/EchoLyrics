@@ -45,4 +45,9 @@ export interface SongInformation {
      * Used for caching overrides instead of title/artist.
      */
     persistenceId?: string;
+
+    /**
+     * International Standard Recording Code
+     */
+    isrc?: string;
 }

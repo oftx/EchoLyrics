@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { LyricsManager } from '@/core/services/LyricsManager';
 import { SongInformation } from '@/core/interfaces/SongInformation';
 import { NeteaseNetworkProvider } from "@/core/providers/NeteaseNetworkProvider";
+import { QQMusicNetworkProvider } from "@/core/providers/QQMusicNetworkProvider";
 import { StandardLrcParser } from '@/core/parsers/StandardLrcParser';
 import { LyricsData } from '@/core/models/LyricsData';
 import { Logger, LogEntry } from '@/core/utils/Logger';
@@ -24,6 +25,7 @@ const converter = new FFmpegConverter();
 const metadataService = new MetadataService();
 // manager.getSearcher().registerProvider(new MockNetworkProvider());
 manager.getSearcher().registerProvider(new NeteaseNetworkProvider());
+manager.getSearcher().registerProvider(new QQMusicNetworkProvider());
 
 // Helper function to format time as mm:ss
 const formatTime = (seconds: number): string => {

@@ -34,6 +34,15 @@ export default defineConfig({
                     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'Cookie': 'os=pc; NMTID='
                 }
+            },
+            '/api/qq': {
+                target: 'https://c.y.qq.com',
+                changeOrigin: true,
+                rewrite: (path) => path.replace(/^\/api\/qq/, ""),
+                headers: {
+                    'Referer': 'https://y.qq.com/',
+                    'Origin': 'https://y.qq.com'
+                }
             }
         }
     }
