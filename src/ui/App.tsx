@@ -853,7 +853,25 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, onLineCl
             // This is robust against skipped/null lines not being rendered in the DOM
             const activeEl = containerRef.current.querySelector(`[data-index="${activeLineIndex}"]`) as HTMLElement;
             if (activeEl) {
-                activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const container = containerRef.current.parentElement;
+                if (container) {
+                    const activeRect = activeEl.getBoundingClientRect();
+                    const containerRect = container.getBoundingClientRect();
+                    const currentScroll = container.scrollTop;
+                    const containerHeight = container.clientHeight;
+                    const activeHeight = activeEl.clientHeight;
+
+                    // Calculate the scroll position to center the element
+                    const targetScroll = currentScroll + (activeRect.top - containerRect.top) - (containerHeight / 2) + (activeHeight / 2);
+
+                    container.scrollTo({
+                        top: targetScroll,
+                        behavior: 'smooth'
+                    });
+                } else {
+                    // Fallback if for some reason there is no parent (unlikely)
+                    activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
             }
         }
     }, [activeLineIndex, autoScroll]);
