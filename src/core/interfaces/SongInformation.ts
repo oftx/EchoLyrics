@@ -50,4 +50,13 @@ export interface SongInformation {
      * International Standard Recording Code
      */
     isrc?: string;
+
+    /**
+     * Aliases found during search (e.g. from MusicBrainz).
+     * Used for cross-lingual scoring.
+     */
+    searchAliases?: {
+        title?: string[];
+        artist?: string[];
+    };
 }

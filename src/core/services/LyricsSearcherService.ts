@@ -3,6 +3,7 @@ import { SongInformation } from "../interfaces/SongInformation";
 import { LyricResult } from "../interfaces/LyricResult";
 import { LyricsProvider } from "../interfaces/LyricsProvider";
 import { ScoringService } from "./ScoringService";
+import { SearchQueryResolver } from "../utils/SearchQueryResolver";
 
 /**
  * Orchestrates the search across multiple providers.
@@ -17,6 +18,23 @@ export class LyricsSearcherService implements LyricsSearcher {
 
     public async search(song: SongInformation, limit: number = 15, onResult?: (results: LyricResult[]) => void): Promise<LyricResult[]> {
         // Spec 2.3.1.2: Multi-source concurrent search.
+
+        // 1. Resolve aliases centrally if strict matching failed before? 
+        // Actually, to implement the plan "Update LyricsSearcherService to populate aliases", 
+        // I need to instantiate SearchQueryResolver here.
+
+        const resolver = new SearchQueryResolver();
+        const queries = await resolver.resolveQueries(song);
+
+        // Populate aliases
+        if (!song.searchAliases) {
+            song.searchAliases = { title: [], artist: [] };
+        }
+        queries.forEach(q => {
+            song.searchAliases!.title!.push(q.title);
+            song.searchAliases!.artist!.push(q.artist);
+        });
+
         const searchTasks = this.providers.map(async (p) => {
             try {
                 const results = await p.search(song, limit);
