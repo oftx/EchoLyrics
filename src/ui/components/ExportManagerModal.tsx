@@ -30,6 +30,7 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
     const [template, setTemplate] = useState("${lyricArtist} - ${lyricTitle}");
     const [providerFilter, setProviderFilter] = useState("All"); // All, Netease Cloud Music, ...
     const [isExporting, setIsExporting] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
 
     // Initial Load & Refresh
     useEffect(() => {
@@ -72,7 +73,7 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
                     let metaTitle: string | undefined;
                     let metaArtist: string | undefined;
                     try {
-                        const metadata = await metadataService.parse(item.audioFile);
+                        const metadata = await metadataService.parse(item.audioFile, { deepScan: false });
                         if (metadata.lyrics) {
                             embeddedLyrics = metadata.lyrics;
                         }
@@ -141,6 +142,63 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
             const isExportable = (c.cacheStatus === 'ready' && matchesProvider) || c.cacheStatus === 'embedded';
             return { ...c, checked: isExportable };
         }));
+    };
+
+    const handleDeepScan = async () => {
+        setIsScanning(true);
+        const metadataService = new MetadataService();
+
+        // Find candidates that are missing lyrics
+        const missingIndices = candidates
+            .map((c, i) => (c.cacheStatus === 'missing' ? i : -1))
+            .filter(i => i !== -1);
+
+        if (missingIndices.length === 0) {
+            alert("No missing lyrics to scan.");
+            setIsScanning(false);
+            return;
+        }
+
+        // Process in chunks or parallel? Sequential is safer for FFmpeg single core
+        // But the MetadataService creates new instance... wait, FFmpegConverter is single instance? 
+        // MetadataService imports FFmpegConverter dynamically. 
+        // FFmpegConverter is a class. If we instantiate new one each time, it might be heavy.
+        // But let's stick to simple sequential for now.
+
+        const newCandidates = [...candidates];
+
+        for (const idx of missingIndices) {
+            const item = playlist[idx]; // We need original file
+            // Oh wait, candidates doesn't store the File object directly in 'song'.
+            // But 'playlist' prop has it.
+            if (!item) continue;
+
+            try {
+                // Force deep scan
+                const metadata = await metadataService.parse(item.audioFile, { deepScan: true });
+                if (metadata.lyrics) {
+                    // Update candidate
+                    newCandidates[idx] = {
+                        ...newCandidates[idx],
+                        cacheStatus: 'embedded',
+                        embeddedLyrics: metadata.lyrics,
+                        // If we found new metadata, maybe update title/artist too?
+                        metadataTitle: metadata.title || newCandidates[idx].metadataTitle,
+                        metadataArtist: metadata.artist || newCandidates[idx].metadataArtist,
+                        checked: true // Auto-select found ones
+                    };
+                    // Force update UI incrementally if we want? 
+                    // React batching might hide it, but let's set it at the end or use functional update if needed.
+                    // For better UX, let's update state every item or every few items.
+                    setCandidates([...newCandidates]);
+                }
+            } catch (e) {
+                console.warn("Deep scan failed for", item.name, e);
+            }
+        }
+
+        setCandidates(newCandidates);
+        setIsScanning(false);
     };
 
     const generateFilename = (song: SongInformation, lyric: LyricResult | null, index: number) => {
@@ -238,6 +296,14 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
                         <button className="btn btn-ghost btn-sm" onClick={() => handleSelectAll(false)}>Select None</button>
                         <button className="btn btn-ghost btn-sm" onClick={handleSelectReady}>Select Ready</button>
                         <button className="btn btn-ghost btn-sm" onClick={() => setCandidates(c => c.map(x => ({ ...x, checked: !x.checked })))}>Invert</button>
+                        <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={handleDeepScan}
+                            disabled={isScanning}
+                            style={{ marginLeft: 'auto' }}
+                        >
+                            {isScanning ? "Scanning..." : "Deep Scan Missing"}
+                        </button>
                     </div>
 
                     <div className="table-wrapper" style={{ flex: 1, overflowY: 'auto' }}>

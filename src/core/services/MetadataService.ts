@@ -17,7 +17,7 @@ export class MetadataService {
      * Parse metadata from an audio file.
      * Returns partial metadata (what is found).
      */
-    public async parse(file: File): Promise<AudioMetadata> {
+    public async parse(file: File, options: { deepScan?: boolean } = {}): Promise<AudioMetadata> {
         try {
             // parseBlob takes the file (which is a Blob)
             const metadata = await parseBlob(file);
@@ -78,8 +78,9 @@ export class MetadataService {
             }
 
             // Final Fallback: FFmpeg Probe
-            if (!result.lyrics) {
-                Logger.info(`[Metadata] Lyrics still missing. Attempting FFmpeg probe for ${file.name}`);
+            // ONLY if deepScan is requested
+            if (!result.lyrics && options.deepScan) {
+                Logger.info(`[Metadata] Lyrics still missing. Attempting FFmpeg probe for ${file.name} (Deep Scan)`);
                 try {
                     const { FFmpegConverter } = await import('./FFmpegConverter');
                     const converter = new FFmpegConverter();
@@ -98,12 +99,11 @@ export class MetadataService {
             if (result.lyrics) {
                 Logger.info(`[Metadata] Successfully extracted lyrics. Length: ${result.lyrics.length}`);
             } else {
-                Logger.warn(`[Metadata] FAILED to extract lyrics after aggressive search AND FFmpeg probe.`);
-                // Dump all tags for debugging if still missing
-                Logger.warn(`[Metadata] Full Native Dump:`, JSON.stringify(metadata.native, (key, value) => {
-                    if (key === 'data') return '[Binary Data]';
-                    return value;
-                }));
+                if (options.deepScan) {
+                    Logger.warn(`[Metadata] FAILED to extract lyrics after aggressive search AND FFmpeg probe.`);
+                } else {
+                    Logger.info(`[Metadata] No lyrics found in standard tags. (Deep scan skipped)`);
+                }
             }
 
             return result;

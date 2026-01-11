@@ -182,7 +182,7 @@ export default function App() {
         let embeddedLyrics = null;
 
         try {
-            const metadata = await metadataService.parse(item.audioFile);
+            const metadata = await metadataService.parse(item.audioFile, { deepScan: false });
             if (metadata.title) metaTitle = metadata.title;
             if (metadata.artist) metaArtist = metadata.artist;
             if (metadata.lyrics) embeddedLyrics = metadata.lyrics;
