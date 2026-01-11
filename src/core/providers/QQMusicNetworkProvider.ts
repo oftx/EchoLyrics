@@ -2,15 +2,32 @@ import { Logger } from "../utils/Logger";
 import { LyricsProvider } from "../interfaces/LyricsProvider";
 import { LyricResult } from "../interfaces/LyricResult";
 import { SongInformation } from "../interfaces/SongInformation";
+import { SearchQueryResolver } from "../utils/SearchQueryResolver";
 
 export class QQMusicNetworkProvider implements LyricsProvider {
     public name = "QQ Music";
     private readonly API_BASE = "/api/qq"; // Proxied path
 
-    public async search(song: SongInformation, limit: number = 15): Promise<LyricResult[]> {
+    private resolver = new SearchQueryResolver();
+
+    public async search(song: SongInformation, limit: number = 8): Promise<LyricResult[]> {
+        const uniqueQueries = await this.resolver.resolveQueries(song);
+        const allResults: LyricResult[] = [];
+
+        for (const query of uniqueQueries) {
+            const results = await this.doSearch(query.title, query.artist, limit);
+            if (results.length > 0) {
+                Logger.info(`[QQMusic] Found results for query "${query.title} - ${query.artist}". Stopping loop.`);
+                return results;
+            }
+        }
+        return allResults;
+    }
+
+    private async doSearch(title: string, artist: string, limit: number): Promise<LyricResult[]> {
         try {
-            const artistPart = (song.artists && song.artists[0]) ? ` ${song.artists[0]}` : "";
-            const keyword = `${song.title}${artistPart}`;
+            const artistPart = artist ? ` ${artist}` : "";
+            const keyword = `${title}${artistPart}`;
 
             // QQ Music Search API
             // w: keyword
@@ -31,9 +48,6 @@ export class QQMusicNetworkProvider implements LyricsProvider {
             const searchResults = searchData.data.song.list;
             Logger.info(`[QQMusic] Found ${searchResults.length} candidates. Fetching lyrics...`);
 
-
-
-            // Re-implementing with cleaner logic below
             return await this.processSearchResults(searchResults);
 
         } catch (error) {

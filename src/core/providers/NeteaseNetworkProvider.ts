@@ -2,15 +2,33 @@ import { Logger } from "../utils/Logger";
 import { LyricsProvider } from "../interfaces/LyricsProvider";
 import { LyricResult } from "../interfaces/LyricResult";
 import { SongInformation } from "../interfaces/SongInformation";
+import { SearchQueryResolver } from "../utils/SearchQueryResolver";
 
 export class NeteaseNetworkProvider implements LyricsProvider {
     public name = "Netease Cloud Music";
     private readonly API_BASE = "/api/netease"; // Proxied path
 
-    public async search(song: SongInformation, limit: number = 15): Promise<LyricResult[]> {
+    private resolver = new SearchQueryResolver();
+
+    public async search(song: SongInformation, limit: number = 8): Promise<LyricResult[]> {
+        const uniqueQueries = await this.resolver.resolveQueries(song);
+        const allResults: LyricResult[] = [];
+
+        for (const query of uniqueQueries) {
+            const results = await this.doSearch(query.title, query.artist, limit);
+            if (results.length > 0) {
+                Logger.info(`[Netease] Found results for query "${query.title} - ${query.artist}". Stopping loop.`);
+                return results;
+            }
+        }
+
+        return allResults;
+    }
+
+    private async doSearch(title: string, artist: string, limit: number): Promise<LyricResult[]> {
         try {
-            const artistPart = (song.artists && song.artists[0]) ? ` ${song.artists[0]}` : "";
-            const keyword = `${song.title}${artistPart}`;
+            const artistPart = artist ? ` ${artist}` : "";
+            const keyword = `${title}${artistPart}`;
             const searchUrl = `${this.API_BASE}/api/cloudsearch/pc?s=${encodeURIComponent(keyword)}&type=1&offset=0&limit=${limit}`;
 
             Logger.info(`[Netease] Searching: ${searchUrl}`);
