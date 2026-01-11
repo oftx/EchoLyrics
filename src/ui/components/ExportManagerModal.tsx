@@ -29,6 +29,7 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
     const [candidates, setCandidates] = useState<ExportCandidate[]>([]);
     const [template, setTemplate] = useState("${lyricArtist} - ${lyricTitle}");
     const [providerFilter, setProviderFilter] = useState("All"); // All, Netease Cloud Music, ...
+    const [availableProviders, setAvailableProviders] = useState<string[]>([]);
     const [isExporting, setIsExporting] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
 
@@ -37,6 +38,9 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
         if (!isOpen) return;
 
         const loadCandidates = async () => {
+            const providers = manager.getProviders();
+            setAvailableProviders(providers.map(p => p.name));
+
             const metadataService = new MetadataService();
             const newCandidates: ExportCandidate[] = [];
 
@@ -286,7 +290,9 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
                                 className="input select"
                             >
                                 <option value="All">All Providers</option>
-                                <option value="Netease Cloud Music">Netease Cloud Music</option>
+                                {availableProviders.map(p => (
+                                    <option key={p} value={p}>{p}</option>
+                                ))}
                             </select>
                         </div>
                     </div>

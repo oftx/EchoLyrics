@@ -50,6 +50,10 @@ export class LyricsManager {
         return this.searcher;
     }
 
+    public getProviders(): import("../interfaces/LyricsProvider").LyricsProvider[] {
+        return this.searcher.getProviders();
+    }
+
     public getSynchronizer(): PlaybackSynchronizer {
         return this.synchronizer;
     }

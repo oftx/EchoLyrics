@@ -16,6 +16,10 @@ export class LyricsSearcherService implements LyricsSearcher {
         this.providers.push(provider);
     }
 
+    public getProviders(): LyricsProvider[] {
+        return this.providers;
+    }
+
     public async search(song: SongInformation, limit: number = 15, onResult?: (results: LyricResult[]) => void): Promise<LyricResult[]> {
         // Spec 2.3.1.2: Multi-source concurrent search.
 
