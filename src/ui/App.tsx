@@ -5,7 +5,7 @@ import { SongInformation } from '@/core/interfaces/SongInformation';
 import { NeteaseNetworkProvider } from "@/core/providers/NeteaseNetworkProvider";
 import { QQMusicNetworkProvider } from "@/core/providers/QQMusicNetworkProvider";
 import { LRCLibNetworkProvider } from "@/core/providers/LRCLibNetworkProvider";
-import { StandardLrcParser } from '@/core/parsers/StandardLrcParser';
+
 import { LyricsData } from '@/core/models/LyricsData';
 import { Logger, LogEntry } from '@/core/utils/Logger';
 import { ExportManagerModal } from './components/ExportManagerModal';
@@ -199,29 +199,24 @@ export default function App() {
             console.warn("Metadata parse failed", e);
         }
 
+        let localLrcContent: string | undefined = undefined;
         if (item.lyricFile) {
-            // Local file mode
             try {
-                const text = await item.lyricFile.text();
-                const parser = new StandardLrcParser();
-                const parsedLyrics = parser.parse(text);
-                parsedLyrics.metadata = parsedLyrics.metadata || {};
-                parsedLyrics.metadata['source'] = 'Local File';
-                parsedLyrics.metadata['title'] = parsedLyrics.metadata['title'] || metaTitle || '';
-                parsedLyrics.metadata['artist'] = parsedLyrics.metadata['artist'] || metaArtist || '';
-
-                if (signature === currentSongSignature || true) {
-                    setLyrics(parsedLyrics);
-                    setStatusMsg("Loaded local lyrics.");
-                }
+                localLrcContent = await item.lyricFile.text();
+                // We no longer manually parse here. We pass it to the manager.
+                setStatusMsg("Loaded local lyrics.");
             } catch (e) {
-                console.error("Failed to parse local lyrics", e);
-                setStatusMsg("Error parsing local lyrics.");
+                console.error("Failed to read local lyric file", e);
             }
-        } else {
-            // Try to search online (or use embedded if available via manager)
-            handleSearchForTrack({ ...item, title: metaTitle, artist: metaArtist }, signature, embeddedLyrics || undefined);
         }
+
+        // Try to search online (or use embedded if available via manager)
+        handleSearchForTrack(
+            { ...item, title: metaTitle, artist: metaArtist },
+            signature,
+            embeddedLyrics || undefined,
+            localLrcContent
+        );
     };
 
     const handleAudioError = async (e: any) => {
@@ -359,7 +354,7 @@ export default function App() {
     };
 
     // New Helper
-    const handleSearchForTrack = async (item: PlaylistItem, signature: string, embeddedLyrics?: string) => {
+    const handleSearchForTrack = async (item: PlaylistItem, signature: string, embeddedLyrics?: string, localLrcContent?: string) => {
         if (!item.title) return;
         setStatusMsg("Loading lyrics...");
         const song: SongInformation = {
@@ -382,7 +377,7 @@ export default function App() {
 
         latestSignatureRef.current = signature;
 
-        const success = await manager.loadLyricsForSong(song);
+        const success = await manager.loadLyricsForSong(song, { localFileContent: localLrcContent });
 
         if (latestSignatureRef.current !== signature) {
             Logger.info("Ignoring stale lyric result.");

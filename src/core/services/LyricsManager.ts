@@ -66,7 +66,7 @@ export class LyricsManager {
      * @param options.ignoreCache If true, bypasses the search cache (forces new search).
      * @param options.limit Max results.
      */
-    public async loadLyricsForSong(song: SongInformation, options?: { ignoreCache?: boolean, limit?: number }): Promise<boolean> {
+    public async loadLyricsForSong(song: SongInformation, options?: { ignoreCache?: boolean, limit?: number, localFileContent?: string }): Promise<boolean> {
         this.lastResults = []; // Clear previous
         const limit = options?.limit || 15;
 
@@ -118,6 +118,45 @@ export class LyricsManager {
             // We'll add it to 'results' after search completions or prepend it.
         }
 
+        // 1.5 Check for Local File Content (Priority 0 - Highest)
+        if (options?.localFileContent) {
+            Logger.info(`[LyricsManager] Found local lyric file content`);
+            const localResult: import("../interfaces/LyricResult").LyricResult = {
+                id: "local_" + Date.now(),
+                lyricText: options.localFileContent,
+                source: "Local File",
+                score: 101, // Higher than embedded (100)
+                title: song.title,
+                artist: song.artists.join(", "),
+                duration: song.duration
+            };
+
+            // If we are just ignoring cache (manual search), add to list.
+            // If normal load, this is usually the best candidate.
+
+            if (!options?.ignoreCache) {
+                // Check persistent selection
+                const cachedEntry = cache[persistenceKey];
+                if (!cachedEntry || !cachedEntry.selectedId) {
+                    // No user override -> Use Local File
+                    this.lastResults.unshift(localResult);
+                    // We need to ensure we don't double add if we continue... 
+                    // Actually, let's just add it to 'lastResults' here and return selectLyric(0).
+                    // But wait, what if we also have embedded lyrics? We want them in the list too.
+                    // And online candidates?
+
+                    // If we have local file, we usually DON'T search online automatically unless requested?
+                    // But the user might want to switch TO online.
+                    // So we should probably continue to search (or use cache) to populate the list, 
+                    // but select the local file by default.
+
+                    // Let's add it to a "pending" list or just remember it.
+                }
+            }
+            // For now, let's push it to a temp array or just modify flow. 
+            // Simplest: Add to beginning of final results.
+        }
+
         if (!options?.ignoreCache) {
             const cachedEntry = cache[persistenceKey];
             if (cachedEntry && cachedEntry.selectedId) {
@@ -142,6 +181,21 @@ export class LyricsManager {
                         duration: song.duration
                     };
                     restoredResults.unshift(embeddedResult);
+                }
+
+                // Check and add local file if provided
+                const hasLocal = restoredResults.some(r => r.source === "Local File");
+                if (options?.localFileContent && !hasLocal) {
+                    const localResult: import("../interfaces/LyricResult").LyricResult = {
+                        id: "local_" + song.persistenceId,
+                        lyricText: options.localFileContent,
+                        source: "Local File",
+                        score: 101,
+                        title: song.title,
+                        artist: song.artists.join(", "),
+                        duration: song.duration
+                    };
+                    restoredResults.unshift(localResult);
                 }
 
                 this.lastResults = restoredResults;
@@ -186,6 +240,19 @@ export class LyricsManager {
                 duration: song.duration
             };
             results.unshift(embeddedResult);
+        }
+
+        if (options?.localFileContent) {
+            const localResult: import("../interfaces/LyricResult").LyricResult = {
+                id: "local_" + Date.now(),
+                lyricText: options.localFileContent,
+                source: "Local File",
+                score: 101,
+                title: song.title,
+                artist: song.artists.join(", "),
+                duration: song.duration
+            };
+            results.unshift(localResult);
         }
 
         this.lastResults = results;
