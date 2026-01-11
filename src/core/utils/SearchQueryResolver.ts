@@ -1,5 +1,6 @@
 import { Logger } from "./Logger";
 import { SongInformation } from "../interfaces/SongInformation";
+import { calculateSimilarity } from "./Levenshtein";
 
 export class SearchQueryResolver {
     private readonly MUSICBRAINZ_API_BASE = "https://musicbrainz.org/ws/2";
@@ -10,10 +11,14 @@ export class SearchQueryResolver {
      * Resolves a list of prioritized queries for a song.
      * Strategy:
      * 1. If ISRC is present, fetch metadata from MusicBrainz and prioritize by language (CN > JP > EN).
-     * 2. If no ISRC or no results, fallback to simple "Title Artist" query.
+     * 2. Check if the original song.title matches one of the MB results (Similarity check).
+     * 3. If similarity is low (< 0.8), it implies a Manual Override (User typed something different).
+     *    Link the manual input as the *Primary* query.
+     * 4. If no ISRC or no results, fallback to simple "Title Artist" query.
      */
     public async resolveQueries(song: SongInformation): Promise<{ title: string; artist: string }[]> {
         let uniqueQueries: { title: string; artist: string }[] = [];
+        let mbMetadata: { title: string; artist: string }[] = [];
 
         // Strategy 1: MusicBrainz Lookup (if ISRC exists)
         if (song.isrc) {
@@ -31,9 +36,13 @@ export class SearchQueryResolver {
             }
 
             try {
-                const mbMetadata = await metadataPromise;
+                mbMetadata = await metadataPromise;
                 if (mbMetadata.length > 0) {
-                    uniqueQueries = this.sortMetadataByLanguage(mbMetadata);
+                    // CLONE the array to prevent mutating the cached instance!
+                    // sort() is in-place, and unshift() later would also modify the cache.
+                    const candidates = [...mbMetadata];
+                    uniqueQueries = this.sortMetadataByLanguage(candidates);
+
                     if (uniqueQueries.length > 0) {
                         Logger.info(`[SearchResolver] Resolved ${uniqueQueries.length} queries from MusicBrainz for ISRC: ${song.isrc}`);
                     }
@@ -43,10 +52,44 @@ export class SearchQueryResolver {
             }
         }
 
-        // Strategy 2: Fallback to original metadata if no MusicBrainz results or no ISRC
-        if (uniqueQueries.length === 0) {
+        // Logic to detect Manual Override / Mismatch
+        // If we have MB results, we check if the current input (song.title) is already in the results.
+        let isManualOverride = false;
+
+        if (uniqueQueries.length > 0) {
+            // Check similarity against the best MB match (or all candidates)
+            const inputTitle = song.title;
+            // We use the highest similarity found among candidates
+            let maxSim = 0;
+            for (const candidate of uniqueQueries) {
+                const sim = calculateSimilarity(inputTitle, candidate.title);
+                if (sim > maxSim) maxSim = sim;
+            }
+
+            // If the best match is less than 0.8 similar, we assume the user input is "different enough"
+            // to warrant being treated as an explicit search (Manual Override)
+            if (maxSim < 0.8) {
+                Logger.info(`[SearchResolver] Detected Manual Override/Mismatch (Max Similarity: ${maxSim.toFixed(2)}). Prioritizing input over MB results.`);
+                isManualOverride = true;
+            }
+        } else {
+            // No MB results, so definitely use input
+            isManualOverride = true;
+        }
+
+        // Strategy 2: Fallback or Manual Override
+        // If override, we prepend the input to the list.
+        // If list is empty (no MB results), we naturally push input.
+        if (isManualOverride || uniqueQueries.length === 0) {
             const artistPart = (song.artists && song.artists[0]) ? song.artists[0] : "";
-            uniqueQueries.push({ title: song.title, artist: artistPart });
+            // Add to the front!
+            const manualQuery = { title: song.title, artist: artistPart };
+
+            // Avoid duplicates if we forcibly prepended but it WAS in the list (e.g. similarity was 0.79 but identical string? unlikely, but check exact title)
+            const exists = uniqueQueries.some(q => q.title === manualQuery.title && q.artist === manualQuery.artist);
+            if (!exists) {
+                uniqueQueries.unshift(manualQuery);
+            }
         }
 
         return uniqueQueries;
