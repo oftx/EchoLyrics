@@ -8,6 +8,7 @@ export interface AudioMetadata {
     album?: string;
     lyrics?: string; // Embedded lyrics
     picture?: Blob; // Album art (future use)
+    isrc?: string;
 }
 
 export class MetadataService {
@@ -27,6 +28,10 @@ export class MetadataService {
             if (common.title) result.title = common.title;
             if (common.artist) result.artist = common.artist;
             if (common.album) result.album = common.album;
+            if (common.isrc && common.isrc.length > 0) {
+                result.isrc = common.isrc[0];
+                Logger.info(`[Metadata] Found ISRC: ${result.isrc}`);
+            }
 
             // PRIORITY 1: Check native tags for ©lyr which contains TIMESTAMPED lyrics (LRC format)
             if (metadata.native) {

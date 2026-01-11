@@ -43,6 +43,11 @@ export default defineConfig({
                     'Referer': 'https://y.qq.com/',
                     'Origin': 'https://y.qq.com'
                 }
+            },
+            '/api/lrclib': {
+                target: 'https://lrclib.net',
+                changeOrigin: true,
+                rewrite: (path) => path.replace(/^\/api\/lrclib/, "/api"),
             }
         }
     }

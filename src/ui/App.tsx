@@ -4,6 +4,7 @@ import { LyricsManager } from '@/core/services/LyricsManager';
 import { SongInformation } from '@/core/interfaces/SongInformation';
 import { NeteaseNetworkProvider } from "@/core/providers/NeteaseNetworkProvider";
 import { QQMusicNetworkProvider } from "@/core/providers/QQMusicNetworkProvider";
+import { LRCLibNetworkProvider } from "@/core/providers/LRCLibNetworkProvider";
 import { StandardLrcParser } from '@/core/parsers/StandardLrcParser';
 import { LyricsData } from '@/core/models/LyricsData';
 import { Logger, LogEntry } from '@/core/utils/Logger';
@@ -17,6 +18,7 @@ interface PlaylistItem {
     lyricFile?: File;
     artist?: string;
     title?: string;
+    isrc?: string;
 }
 
 // Singleton instance for the app
@@ -26,6 +28,7 @@ const metadataService = new MetadataService();
 // manager.getSearcher().registerProvider(new MockNetworkProvider());
 manager.getSearcher().registerProvider(new NeteaseNetworkProvider());
 manager.getSearcher().registerProvider(new QQMusicNetworkProvider());
+manager.getSearcher().registerProvider(new LRCLibNetworkProvider());
 
 // Helper function to format time as mm:ss
 const formatTime = (seconds: number): string => {
@@ -183,6 +186,7 @@ export default function App() {
             if (metadata.title) metaTitle = metadata.title;
             if (metadata.artist) metaArtist = metadata.artist;
             if (metadata.lyrics) embeddedLyrics = metadata.lyrics;
+            if (metadata.isrc) item.isrc = metadata.isrc;
 
             // Update the playlist item in place (optional, for caching in session)
             item.title = metaTitle;
@@ -365,7 +369,8 @@ export default function App() {
             duration: 0,
             sourceId: "local_auto",
             persistenceId: item.name, // Use filename as stable ID,
-            lyrics: embeddedLyrics
+            lyrics: embeddedLyrics,
+            isrc: item.isrc
         };
 
         // We use a ref to track active request? 
@@ -435,7 +440,8 @@ export default function App() {
             album: "",
             duration: audioRef.current?.duration ? audioRef.current.duration * 1000 : 0,
             sourceId: "local",
-            persistenceId: persistenceId // Bind this search to the current file
+            persistenceId: persistenceId, // Bind this search to the current file
+            isrc: (currentIndex >= 0 && currentIndex < playlist.length) ? playlist[currentIndex].isrc : undefined
         };
 
         const success = await manager.loadLyricsForSong(song, {
