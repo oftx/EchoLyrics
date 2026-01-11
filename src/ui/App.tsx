@@ -25,6 +25,8 @@ interface PlaylistItem {
 const manager = new LyricsManager();
 const converter = new FFmpegConverter();
 const metadataService = new MetadataService();
+
+// ... existing registerProviders ...
 // manager.getSearcher().registerProvider(new MockNetworkProvider());
 manager.getSearcher().registerProvider(new NeteaseNetworkProvider());
 manager.getSearcher().registerProvider(new QQMusicNetworkProvider());
@@ -84,6 +86,17 @@ export default function App() {
                 return newLogs;
             });
         });
+    }, []);
+
+    // Subscribe to LyricsManager updates
+    useEffect(() => {
+        const unsubscribe = manager.subscribe((data) => {
+            // We only update if valid data is present. 
+            // Or should we allow null?
+            // If data is null, it means lyrics were cleared (or initial).
+            setLyrics(data);
+        });
+        return unsubscribe;
     }, []);
 
     // Auto-scroll logs

@@ -23,6 +23,7 @@ export class LyricsManager {
     private currentLyrics: LyricsData | null = null;
     private lastResults: import("../interfaces/LyricResult").LyricResult[] = [];
     private currentSongKey: string = "";
+    private listeners: ((data: LyricsData | null) => void)[] = [];
 
     private readonly STORAGE_KEY = "echo_lyrics_cache_v1";
 
@@ -30,6 +31,19 @@ export class LyricsManager {
 
     constructor() {
         // Init default parsers? yes.
+    }
+
+    public subscribe(callback: (data: LyricsData | null) => void): () => void {
+        this.listeners.push(callback);
+        // Immediately notify current state? Maybe not strictly necessary but helpful
+        // callback(this.currentLyrics); 
+        return () => {
+            this.listeners = this.listeners.filter(l => l !== callback);
+        };
+    }
+
+    private notifyListeners() {
+        this.listeners.forEach(l => l(this.currentLyrics));
     }
 
     public getSearcher(): LyricsSearcherService {
@@ -51,6 +65,7 @@ export class LyricsManager {
         const parser = this.parsers[0];
         const data = parser.parse(text);
         this.currentLyrics = data;
+        this.notifyListeners();
         return data;
     }
 
@@ -68,6 +83,9 @@ export class LyricsManager {
      */
     public async loadLyricsForSong(song: SongInformation, options?: { ignoreCache?: boolean, limit?: number, localFileContent?: string }): Promise<boolean> {
         this.lastResults = []; // Clear previous
+        this.currentLyrics = null; // Reset current lyrics state for new song
+        this.notifyListeners(); // Notify UI to clear
+
         const limit = options?.limit || 15;
 
         // Key for PERSISTENCE (Which result did I choose for this file?)
@@ -244,17 +262,17 @@ export class LyricsManager {
                 // Sort again
                 this.lastResults.sort((a, b) => b.score - a.score);
 
-                // Look for best candidate currently
-                // If we haven't selected anything yet (currentLyrics is null or placeholder?), or if we want to AUTO-SWITCH to a better one?
-                // Requirement: "Select highest score candidate in real time"
-
-                // We should probably only auto-switch if the new best score is significantly better 
-                // OR if we are currently using a "low quality" lyric.
-                // For now, let's aggressively select the best one if it's better than current.
-
                 const best = this.lastResults[0];
                 const currentScore = Number(this.currentLyrics?.metadata?.score || 0);
-                if (best && best.score > currentScore) {
+
+                // Rule 1: If we already have a "Good Enough" result (>=70), do not switch anymore.
+                // This prevents jankiness once we have a solid match.
+                if (currentScore >= 70) {
+                    return;
+                }
+
+                // Rule 2: Only auto-select if the new result is "Acceptable" (> 45) AND better than what we have.
+                if (best && best.score > 45 && best.score > currentScore) {
                     Logger.info(`[LyricsManager] Auto-selecting better candidate from stream: ${best.title} (${best.score})`);
                     // We need to find the index in the new sorted array
                     const idx = this.lastResults.indexOf(best);
@@ -262,6 +280,13 @@ export class LyricsManager {
                 }
             }
         });
+
+        // 3.5 Check for Race Condition
+        if (this.currentSongKey !== persistenceKey) {
+            Logger.info(`[LyricsManager] Search result ignored because song changed (Current: ${this.currentSongKey}, Search: ${persistenceKey})`);
+            return false;
+        }
+
         if (song.lyrics) {
             const embeddedResult: import("../interfaces/LyricResult").LyricResult = {
                 id: "embedded_" + Date.now(),
@@ -325,6 +350,7 @@ export class LyricsManager {
         data.metadata['title'] = data.metadata['title'] || best.title || ""; // update meta
         data.metadata['artist'] = data.metadata['artist'] || best.artist || "";
         this.currentLyrics = data;
+        this.notifyListeners();
 
         if (saveSelection && this.currentSongKey && best.id) {
             this.saveCache(this.currentSongKey, this.lastResults, best.id);
