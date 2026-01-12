@@ -626,7 +626,7 @@ export default function App() {
                 {lyrics && (
                     <div className="display-mode-controls" style={{ marginLeft: 'auto' }}>
                         <select
-                            className="select select-sm select-ghost"
+                            className="select select-sm select-display-mode"
                             value={displayMode}
                             onChange={(e) => handleDisplayModeChange(e.target.value as DisplayMode)}
                         >
