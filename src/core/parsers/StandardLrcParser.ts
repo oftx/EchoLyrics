@@ -84,7 +84,7 @@ export class StandardLrcParser implements LyricsParser {
             }
         } else if (rawText.trim().length > 0) {
             // Fallback: Plain text lyrics (no timestamps found)
-            rawLines.forEach((line, index) => {
+            rawLines.forEach((line) => {
                 line = line.trim();
                 // Check if it's metadata (already processed)
                 if (StandardLrcParser.META_REGEX.test(line)) return;
