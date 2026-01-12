@@ -112,6 +112,25 @@ export default function App() {
         }
     }, [logs]);
 
+    // Handle playback safely when source changes
+    useEffect(() => {
+        if (audioSrc && audioRef.current) {
+            const playPromise = audioRef.current.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    // AbortError is expected when switching songs
+                    if (error.name === 'AbortError') return;
+
+                    // NotSupportedError is expected if format is not natively supported.
+                    // The 'onError' event handler will catch this and trigger transcoding.
+                    if (error.name === 'NotSupportedError') return;
+
+                    console.error("Playback failed:", error);
+                });
+            }
+        }
+    }, [audioSrc]);
+
     // Handle folder selection
     const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -273,10 +292,8 @@ export default function App() {
                 const wavUrl = URL.createObjectURL(result.blob);
                 setAudioSrc(wavUrl);
                 setStatusMsg("Transcoding complete. Playing...");
-                if (audioRef.current) {
-                    audioRef.current.load();
-                    audioRef.current.play();
-                }
+                setAudioSrc(wavUrl);
+                setStatusMsg("Transcoding complete. Playing...");
                 // Note: Lyrics are already loaded by playTrack via MetadataService
                 // No need to reload from FFmpeg - this caused duplicate lyrics
             } catch (err) {
@@ -672,7 +689,6 @@ export default function App() {
                         ref={audioRef}
                         src={audioSrc}
                         controls={useNativePlayer}
-                        autoPlay
                         onTimeUpdate={handleTimeUpdate}
                         onEnded={handleAudioEnded}
                         onError={handleAudioError}
@@ -687,7 +703,9 @@ export default function App() {
                                 className="custom-player-btn custom-player-btn--play"
                                 onClick={() => {
                                     if (audioRef.current?.paused) {
-                                        audioRef.current.play();
+                                        audioRef.current.play().catch(e => {
+                                            if (e.name !== 'AbortError') console.error(e);
+                                        });
                                     } else {
                                         audioRef.current?.pause();
                                     }
