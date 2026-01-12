@@ -220,24 +220,50 @@ export const ExportManagerModal: React.FC<ExportManagerModalProps> = ({ isOpen, 
         setIsExporting(true);
         try {
             const zip = new JSZip();
+
+            // Create folders
+            const folderOriginal = zip.folder("Original");
+            const folderTranslation = zip.folder("Translation");
+            const folderMixed = zip.folder("Mixed");
+
             const selected = candidates.filter(c => c.checked);
             let count = 0;
 
             for (const item of selected) {
-                let lyricText: string | null = null;
+                let originalText: string | null = null;
+                let translationText: string | null = null;
 
                 if (item.cacheStatus === 'ready' && item.lyric) {
                     // Check provider filter
                     if (providerFilter !== "All" && item.lyric.source !== providerFilter) continue;
-                    lyricText = item.lyric.lyricText;
+
+                    originalText = item.lyric.lyricText;
+                    translationText = item.lyric.translationText || null;
+
                 } else if (item.cacheStatus === 'embedded' && item.embeddedLyrics) {
-                    // Embedded lyrics bypass provider filter
-                    lyricText = item.embeddedLyrics;
+                    // Embedded lyrics treated as original (and mixed)
+                    originalText = item.embeddedLyrics;
                 }
 
-                if (lyricText) {
+                if (originalText) {
                     const filename = generateFilename(item.song, item.lyric, item.index + 1);
-                    zip.file(filename, lyricText);
+
+                    // 1. Write Original
+                    if (folderOriginal) folderOriginal.file(filename, originalText);
+
+                    // 2. Write Translation (if available)
+                    if (translationText && folderTranslation) {
+                        folderTranslation.file(filename, translationText);
+                    }
+
+                    // 3. Write Mixed
+                    if (folderMixed) {
+                        const mixedContent = translationText
+                            ? (originalText + "\n" + translationText)
+                            : originalText;
+                        folderMixed.file(filename, mixedContent);
+                    }
+
                     count++;
                 }
             }
