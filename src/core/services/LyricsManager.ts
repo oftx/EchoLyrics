@@ -8,6 +8,13 @@ import { LyricsData } from "../models/LyricsData";
 import { SongInformation } from "../interfaces/SongInformation";
 
 
+
+export enum DisplayMode {
+    Original = "Original",
+    Translation = "Translation",
+    Both = "Both"
+}
+
 /**
  * Main facade for the UI to interact with.
  * Manages search, parsing, and state.
@@ -31,6 +38,12 @@ export class LyricsManager {
 
     constructor() {
         // Init default parsers? yes.
+        const savedMode = localStorage.getItem("lyrics_display_mode");
+        if (savedMode && Object.values(DisplayMode).includes(savedMode as any)) {
+            this.displayMode = savedMode as DisplayMode;
+        } else {
+            this.displayMode = DisplayMode.Both; // Default to Both
+        }
     }
 
     public subscribe(callback: (data: LyricsData | null) => void): () => void {
@@ -339,13 +352,35 @@ export class LyricsManager {
         return false;
     }
 
+    private displayMode: DisplayMode = DisplayMode.Original;
+
+    public setDisplayMode(mode: DisplayMode) {
+        this.displayMode = mode;
+        localStorage.setItem("lyrics_display_mode", mode);
+        // We don't need to re-parse, just notify listeners so UI updates
+        this.notifyListeners();
+    }
+
+    public getDisplayMode(): DisplayMode {
+        return this.displayMode;
+    }
+
     public selectLyric(index: number, saveSelection: boolean = true): boolean {
         if (index < 0 || index >= this.lastResults.length) return false;
 
         const best = this.lastResults[index];
         Logger.info(`[LyricsManager] Selected Index ${index}: ${best.title} (Score: ${best.score})`);
 
-        const data = this.parse(best.lyricText);
+        // Merge Original and Translation if available
+        let rawText = best.lyricText;
+        if (best.translationText) {
+            Logger.info(`[LyricsManager] Merging translation for ${best.title}`);
+            // Simple concatenation works because the parser sorts by timestamp
+            // and groups identical timestamps into layers.
+            rawText = rawText + "\n" + best.translationText;
+        }
+
+        const data = this.parse(rawText);
         if (!data.metadata) {
             data.metadata = {};
         }

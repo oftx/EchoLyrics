@@ -61,6 +61,7 @@ export class NeteaseNetworkProvider implements LyricsProvider {
                                 (track.album ? track.album.name : "Unknown"),
                             duration: track.dt || track.duration,
                             lyricText: lyricData.lrc.lyric,
+                            translationText: lyricData.tlyric ? lyricData.tlyric.lyric : undefined,
                             source: this.name,
                             score: 0 // To be calculated
                         } as LyricResult;

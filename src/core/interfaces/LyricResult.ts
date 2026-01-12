@@ -42,5 +42,10 @@ export interface LyricResult {
      * Duration in ms (if available).
      */
     duration?: number;
+
+    /**
+     * Raw text content of the translation (optional).
+     */
+    translationText?: string;
 }
 

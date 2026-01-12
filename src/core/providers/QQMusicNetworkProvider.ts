@@ -82,6 +82,20 @@ export class QQMusicNetworkProvider implements LyricsProvider {
                     // Decode UTF-8
                     const decodedUtils = new TextDecoder('utf-8').decode(bytes);
 
+                    let decodedTrans = undefined;
+                    if (json.trans) {
+                        try {
+                            const transBinaryString = atob(json.trans);
+                            const transBytes = new Uint8Array(transBinaryString.length);
+                            for (let i = 0; i < transBinaryString.length; i++) {
+                                transBytes[i] = transBinaryString.charCodeAt(i);
+                            }
+                            decodedTrans = new TextDecoder('utf-8').decode(transBytes);
+                        } catch (e) {
+                            Logger.warn(`[QQMusic] Failed to decode translation for ${track.songmid}`, e);
+                        }
+                    }
+
                     return {
                         id: String(track.songmid),
                         title: track.songname,
@@ -89,6 +103,7 @@ export class QQMusicNetworkProvider implements LyricsProvider {
                         album: track.albumname,
                         duration: track.interval, // seconds to ms? Input seems to be seconds.
                         lyricText: decodedUtils, // Use correctly decoded text
+                        translationText: decodedTrans,
                         source: this.name,
                         score: 0
                     } as LyricResult;
