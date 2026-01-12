@@ -944,91 +944,114 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, displayM
     }, [activeLineIndex, autoScroll, displayMode]); // Add displayMode dependency to re-scroll if mode changes
 
     return (
-        <div ref={containerRef} className={`lyrics-content lyrics-mode-${displayMode.toLowerCase()}`}>
-            {lyrics.lines.map((line, idx) => {
-                // Skip empty lines
-                const lineText = line.syllables
-                    ? line.syllables.map(s => s.text).join('').trim()
-                    : (line.text || '').trim();
-                if (!lineText) return null;
+        <>
+            {/* Unsynced Warning */}
+            {lyrics && lyrics.isSynced === false && (
+                <div style={{
+                    position: 'absolute',
+                    top: '10px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'rgba(245, 158, 11, 0.2)', // Warning color background
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    color: '#fbbf24',
+                    padding: '4px 12px',
+                    borderRadius: '16px',
+                    fontSize: '0.75rem',
+                    zIndex: 10,
+                    pointerEvents: 'none'
+                }}>
+                    Lyrics not synced to timeline
+                </div>
+            )}
 
-                // Filtering Logic
-                const isOriginal = line.layer === 0 || line.layer === undefined;
-                const isTranslation = line.layer === 1;
+            <div ref={containerRef} className={`lyrics-content lyrics-mode-${displayMode.toLowerCase()}`}>
+                {lyrics.lines.map((line, idx) => {
+                    // Skip empty lines
+                    const lineText = line.syllables
+                        ? line.syllables.map(s => s.text).join('')
+                        : line.text;
 
-                if (displayMode === DisplayMode.Original && !isOriginal) return null;
-                if (displayMode === DisplayMode.Translation && !isTranslation) {
-                    // Special case: If NO translation lines exist at all, should we fallback? 
-                    // For now, strict filtering.
-                    return null;
-                }
+                    if (!lineText.trim()) return null;
 
-                let isActive = idx === activeLineIndex;
+                    // Filtering Logic
+                    const isOriginal = line.layer === 0 || line.layer === undefined;
+                    const isTranslation = line.layer === 1;
 
-                // Fix Highlight Logic: 
-                // 1. If Hidden Partner: If the "Actual Active" index is hidden (e.g. translation hidden), 
-                //    but this line is the visible partner (same timestamp), highlight this one.
-                // 2. If Both Mode: If this line is the partner of the active line (same timestamp),
-                //    ALSO highlight it.
-                if (!isActive) {
-                    const activeLine = lyrics.lines[activeLineIndex];
-                    if (activeLine && Math.abs(activeLine.startTime - line.startTime) < 50) { // < 50ms tolerance
-                        if (displayMode === DisplayMode.Both) {
-                            isActive = true;
-                        } else {
-                            // If NOT both mode, only highlight if the ACTUAL active line is hidden?
-                            // Actually, in single modes, we filtered out the other lines above.
-                            // So if we are here, we are the VISIBLE line. 
-                            // If the active index was the Invisible one, we should take the highlight.
-                            // Logic: If activeLine is NOT visible (filtered out), then WE take highlight.
-                            const activeIsOriginal = activeLine.layer === 0 || activeLine.layer === undefined;
-                            const activeIsTranslation = activeLine.layer === 1;
+                    if (displayMode === DisplayMode.Original && !isOriginal) return null;
+                    if (displayMode === DisplayMode.Translation && !isTranslation) {
+                        // Special case: If NO translation lines exist at all, should we fallback? 
+                        // For now, strict filtering.
+                        return null;
+                    }
 
-                            const activeHidden = (displayMode === DisplayMode.Original && !activeIsOriginal) ||
-                                (displayMode === DisplayMode.Translation && !activeIsTranslation);
+                    let isActive = idx === activeLineIndex;
+                    if (lyrics.isSynced === false) isActive = false; // Disable highlighting for unsynced
 
-                            if (activeHidden) {
+                    // Fix Highlight Logic: 
+                    // 1. If Hidden Partner: If the "Actual Active" index is hidden (e.g. translation hidden), 
+                    //    but this line is the visible partner (same timestamp), highlight this one.
+                    // 2. If Both Mode: If this line is the partner of the active line (same timestamp),
+                    //    ALSO highlight it.
+                    if (!isActive) {
+                        const activeLine = lyrics.lines[activeLineIndex];
+                        if (activeLine && Math.abs(activeLine.startTime - line.startTime) < 50) { // < 50ms tolerance
+                            if (displayMode === DisplayMode.Both) {
                                 isActive = true;
+                            } else {
+                                // If NOT both mode, only highlight if the ACTUAL active line is hidden?
+                                // Actually, in single modes, we filtered out the other lines above.
+                                // So if we are here, we are the VISIBLE line. 
+                                // If the active index was the Invisible one, we should take the highlight.
+                                // Logic: If activeLine is NOT visible (filtered out), then WE take highlight.
+                                const activeIsOriginal = activeLine.layer === 0 || activeLine.layer === undefined;
+                                const activeIsTranslation = activeLine.layer === 1;
+
+                                const activeHidden = (displayMode === DisplayMode.Original && !activeIsOriginal) ||
+                                    (displayMode === DisplayMode.Translation && !activeIsTranslation);
+
+                                if (activeHidden) {
+                                    isActive = true;
+                                }
                             }
                         }
                     }
-                }
+                    return (
+                        <div
+                            key={idx}
+                            data-index={idx}
+                            onClick={() => onLineClick && onLineClick(line.startTime)}
+                            className={`lyric-line ${isActive ? 'lyric-line--active' : 'lyric-line--inactive'} ${line.layer === 1 ? 'lyric-line--translation' : ''}`}
+                        >
+                            {line.syllables ? (
+                                <div>
+                                    {line.syllables.map((syl, sylIdx) => {
+                                        const sylAbsStart = line.startTime + syl.startTime;
+                                        const sylAbsEnd = sylAbsStart + syl.duration;
+                                        const isSylPassed = currentTime >= sylAbsEnd;
+                                        const isSylActive = currentTime >= sylAbsStart && currentTime < sylAbsEnd;
 
-                return (
-                    <div
-                        key={idx}
-                        data-index={idx}
-                        onClick={() => onLineClick && onLineClick(line.startTime)}
-                        className={`lyric-line ${isActive ? 'lyric-line--active' : 'lyric-line--inactive'} ${isTranslation ? 'lyric-line--translation' : ''}`}
-                    >
-                        {line.syllables ? (
-                            <div>
-                                {line.syllables.map((syl, sylIdx) => {
-                                    const sylAbsStart = line.startTime + syl.startTime;
-                                    const sylAbsEnd = sylAbsStart + syl.duration;
-                                    const isSylPassed = currentTime >= sylAbsEnd;
-                                    const isSylActive = currentTime >= sylAbsStart && currentTime < sylAbsEnd;
+                                        let sylClass = 'lyric-syllable';
+                                        if (isActive) {
+                                            if (isSylPassed) sylClass += ' lyric-syllable--passed';
+                                            else if (isSylActive) sylClass += ' lyric-syllable--active';
+                                            else sylClass += ' lyric-syllable--upcoming';
+                                        }
 
-                                    let sylClass = 'lyric-syllable';
-                                    if (isActive) {
-                                        if (isSylPassed) sylClass += ' lyric-syllable--passed';
-                                        else if (isSylActive) sylClass += ' lyric-syllable--active';
-                                        else sylClass += ' lyric-syllable--upcoming';
-                                    }
-
-                                    return (
-                                        <span key={sylIdx} className={sylClass}>
-                                            {syl.text}
-                                        </span>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            line.text
-                        )}
-                    </div>
-                )
-            })}
-        </div>
+                                        return (
+                                            <span key={sylIdx} className={sylClass}>
+                                                {syl.text}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                line.text
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </>
     );
 }

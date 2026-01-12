@@ -64,12 +64,6 @@ export class StandardLrcParser implements LyricsParser {
         parsedEntries.sort((a, b) => a.time - b.time);
 
         // Grouping logic (Spec 2.2.2.4)
-        // If start times are identical, assign layers.
-        // We need to iterate and check for overlaps.
-
-        // Simple grouping strategy:
-        // Iterate through sorted entries. If current.time == previous.time, increment layer.
-
         if (parsedEntries.length > 0) {
             let currentGroupTime = -1;
             let currentLayer = 0;
@@ -82,21 +76,33 @@ export class StandardLrcParser implements LyricsParser {
                     currentLayer = 0;
                 }
 
-                // Handling the stack limit mentioned in Spec 2.2.2.4 (Max 3 layers usually)
-                // Spec says: Original(0) -> Trans(1) -> Romaji(2) -> Extra trans...
-                // We just assign the layer number.
-
                 lines.push({
                     startTime: entry.time,
                     text: entry.text,
                     layer: currentLayer
                 });
             }
+        } else if (rawText.trim().length > 0) {
+            // Fallback: Plain text lyrics (no timestamps found)
+            rawLines.forEach((line, index) => {
+                line = line.trim();
+                // Check if it's metadata (already processed)
+                if (StandardLrcParser.META_REGEX.test(line)) return;
+
+                if (line) {
+                    lines.push({
+                        startTime: 0, // No timing
+                        text: line,
+                        layer: 0
+                    });
+                }
+            });
         }
 
         return {
             lines,
-            metadata
+            metadata,
+            isSynced: parsedEntries.length > 0
         };
     }
 }

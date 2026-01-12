@@ -48,4 +48,10 @@ export interface LyricsData {
      * Key-value format.
      */
     metadata: Record<string, string>;
+
+    /**
+     * Whether the lyrics are synchronized with timestamps.
+     * If false, these are plain text lyrics.
+     */
+    isSynced?: boolean;
 }
