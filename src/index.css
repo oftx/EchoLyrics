@@ -663,7 +663,8 @@ body {
   margin: var(--space-1) 0;
   text-align: center;
   cursor: pointer;
-  transition: all var(--transition-base);
+  /* Only transition non-layout properties to ensure accurate scroll calculation */
+  transition: color var(--transition-base), transform var(--transition-base), text-shadow var(--transition-base), opacity var(--transition-base);
   transform-origin: center center;
   min-height: 1.2em;
 }

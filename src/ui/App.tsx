@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { LyricsManager, DisplayMode } from '@/core/services/LyricsManager';
 import { SongInformation } from '@/core/interfaces/SongInformation';
@@ -384,8 +384,11 @@ export default function App() {
         if (audioRef.current) {
             audioRef.current.currentTime = startTime / 1000;
             setCurrentTime(startTime);
-            // Optional: Play if paused?
-            // audioRef.current.play();
+            // Instant update of active index
+            if (lyrics) {
+                const idx = manager.getSynchronizer().findLineIndex(lyrics, startTime);
+                setActiveLineIndex(idx);
+            }
         }
     };
 
@@ -733,7 +736,13 @@ export default function App() {
                                 value={currentTime / 1000}
                                 onChange={(e) => {
                                     if (audioRef.current) {
-                                        audioRef.current.currentTime = parseFloat(e.target.value);
+                                        const t = parseFloat(e.target.value);
+                                        audioRef.current.currentTime = t;
+                                        setCurrentTime(t * 1000);
+                                        if (lyrics) {
+                                            const idx = manager.getSynchronizer().findLineIndex(lyrics, t * 1000);
+                                            setActiveLineIndex(idx);
+                                        }
                                     }
                                 }}
                             />
@@ -833,7 +842,7 @@ export default function App() {
                                 currentTime={currentTime}
                                 autoScroll={true}
                                 displayMode={displayMode}
-                                centerRatio={0.6}
+                                centerRatio={0.5}
                                 onLineClick={handleLyricClick}
                             />
                         ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
@@ -902,64 +911,87 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, displayM
     // Auto-scroll for PiP mode (Since main window uses its own ref logic, we probably want self-contained logic here too)
     // The main window logic was doing `lyricsContainerRef` scrolling.
 
-    useEffect(() => {
-        if (autoScroll && activeLineIndex !== -1 && containerRef.current) {
-            // Use data-index to find the specific element corresponding to the active line index
-            // This is robust against skipped/null lines not being rendered in the DOM
-            const activeEl = containerRef.current.querySelector(`[data-index="${activeLineIndex}"]`) as HTMLElement;
-            // If the exact index is hidden (e.g. Translation line hidden), try finding the sibling
-            // Actually, we need to find "The element that represents the active line" or "The element that is currently visual active"
-            // Our rendering logic below sets 'lyric-line--active' class. We can query that!
-            const visualActiveEl = activeEl || containerRef.current.querySelector('.lyric-line--active') as HTMLElement;
+    const scrollToActive = useCallback(() => {
+        if (!containerRef.current) return;
 
-            if (visualActiveEl) {
-                const container = containerRef.current.parentElement;
-                if (container) {
-                    // Logic: Identify the "Group Leader" (Original Line)
-                    let centerTargetEl = visualActiveEl;
+        const activeEl = containerRef.current.querySelector(`[data-index="${activeLineIndex}"]`) as HTMLElement;
+        const visualActiveEl = activeEl || containerRef.current.querySelector('.lyric-line--active') as HTMLElement;
 
-                    // If we are centering a Translation line in Both mode, we should center the group instead.
-                    // The Translation line is usually "below" the original.
-                    // So if visualActiveEl is a translation, look at previous sibling.
-                    if (displayMode === DisplayMode.Both && visualActiveEl.classList.contains('lyric-line--translation')) {
-                        const prev = visualActiveEl.previousElementSibling as HTMLElement;
-                        if (prev && !prev.classList.contains('lyric-line--translation')) {
-                            centerTargetEl = prev;
-                        }
+        if (visualActiveEl) {
+            const container = containerRef.current.parentElement;
+            if (container) {
+                let centerTargetEl = visualActiveEl;
+
+                if (displayMode === DisplayMode.Both && visualActiveEl.classList.contains('lyric-line--translation')) {
+                    const prev = visualActiveEl.previousElementSibling as HTMLElement;
+                    if (prev && !prev.classList.contains('lyric-line--translation')) {
+                        centerTargetEl = prev;
                     }
-
-                    const activeRect = centerTargetEl.getBoundingClientRect();
-
-                    // Check for translation line immediately following
-                    let groupHeight = centerTargetEl.clientHeight;
-                    let groupTop = activeRect.top;
-
-                    const nextSibling = centerTargetEl.nextElementSibling as HTMLElement;
-                    if (displayMode === DisplayMode.Both && nextSibling && nextSibling.classList.contains('lyric-line--translation')) {
-                        const nextRect = nextSibling.getBoundingClientRect();
-                        const combinedBottom = Math.max(activeRect.bottom, nextRect.bottom);
-                        groupHeight = combinedBottom - activeRect.top;
-                    }
-
-                    const containerRect = container.getBoundingClientRect();
-                    const currentScroll = container.scrollTop;
-                    const containerHeight = container.clientHeight;
-
-                    // Calculate the scroll position to center the GROUP
-                    // Use configurable centerRatio (default 0.5)
-                    const targetScroll = currentScroll + (groupTop - containerRect.top) - (containerHeight * centerRatio) + (groupHeight / 2);
-
-                    container.scrollTo({
-                        top: targetScroll,
-                        behavior: 'smooth'
-                    });
-                } else {
-                    // Fallback if for some reason there is no parent (unlikely)
-                    visualActiveEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
+
+                const activeRect = centerTargetEl.getBoundingClientRect();
+
+                let groupHeight = centerTargetEl.clientHeight;
+                let groupTop = activeRect.top;
+
+                const nextSibling = centerTargetEl.nextElementSibling as HTMLElement;
+                if (displayMode === DisplayMode.Both && nextSibling && nextSibling.classList.contains('lyric-line--translation')) {
+                    const nextRect = nextSibling.getBoundingClientRect();
+                    const combinedBottom = Math.max(activeRect.bottom, nextRect.bottom);
+                    groupHeight = combinedBottom - activeRect.top;
+                }
+
+                const containerRect = container.getBoundingClientRect();
+                const currentScroll = container.scrollTop;
+                const containerHeight = container.clientHeight;
+
+                const targetScroll = currentScroll + (groupTop - containerRect.top) - (containerHeight * centerRatio) + (groupHeight / 2);
+
+                container.scrollTo({
+                    top: targetScroll,
+                    behavior: 'smooth'
+                });
+            } else {
+                visualActiveEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
-    }, [activeLineIndex, autoScroll, displayMode]); // Add displayMode dependency to re-scroll if mode changes
+    }, [activeLineIndex, displayMode, centerRatio]);
+
+    const prevActiveLineIndex = useRef(activeLineIndex);
+
+    useLayoutEffect(() => {
+        if (autoScroll && activeLineIndex !== -1) {
+            // Scroll Anchoring: Compensate for the shrinking of the previous line
+            // If we advanced sequentially (N -> N+1)
+            if (activeLineIndex === prevActiveLineIndex.current + 1 && containerRef.current) {
+                const prevLine = containerRef.current.querySelector(`[data-index="${prevActiveLineIndex.current}"]`) as HTMLElement;
+                if (prevLine && containerRef.current.parentElement) {
+                    // The previous line just shrank from 1.5em to 1em (approx factor 0.5 difference)
+                    // We measure its CURRENT (shrunk) height. 
+                    // The "lost" height is approx 0.5 * currentHeight.
+                    const h = prevLine.clientHeight;
+                    const delta = h * 0.5;
+
+                    // We need to scroll UP (reduce scrollTop) to push the content DOWN 
+                    // to counteract the fact that content moved UP due to shrinking.
+                    containerRef.current.parentElement.scrollTop -= delta;
+                }
+            }
+
+            scrollToActive();
+            prevActiveLineIndex.current = activeLineIndex;
+        }
+    }, [activeLineIndex, autoScroll, scrollToActive]);
+
+    useEffect(() => {
+        const container = containerRef.current?.parentElement;
+        if (!container) return;
+        const resizeObserver = new ResizeObserver(() => {
+            if (autoScroll && activeLineIndex !== -1) scrollToActive();
+        });
+        resizeObserver.observe(container);
+        return () => resizeObserver.disconnect();
+    }, [autoScroll, activeLineIndex, scrollToActive]);
 
     return (
         <>
