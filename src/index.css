@@ -630,12 +630,31 @@ body {
   font-size: var(--text-base);
 }
 
+
 .lyric-line--active {
   color: var(--primary-light);
-  font-size: 1.3em;
-  font-weight: 600;
+  font-size: 1.5em; /* Larger to distinguish main lyrics */
+  font-weight: 700; /* Bolder */
   transform: scale(1.05);
   text-shadow: 0 0 30px var(--primary-glow);
+}
+
+/* Translation Styling & Grouping (Only active in 'Both' mode) */
+.lyrics-mode-both .lyric-line--translation {
+  font-size: 0.75em !important; /* Smaller than original */
+  opacity: 0.7; /* Distinguish visual weight */
+  margin-top: -8px !important; /* Pull closer to the original line above */
+  margin-bottom: var(--space-4) !important; /* Push next pair away */
+}
+
+/* Ensure active translation is visible but NOT highlighted in color */
+.lyrics-mode-both .lyric-line--translation.lyric-line--active {
+  font-size: 0.9em !important;
+  color: var(--text-secondary) !important; /* Force neutral gray, never highlight */
+  opacity: 0.8 !important; /* Keep it subtle */
+  text-shadow: none !important; /* Remove glow */
+  transform: none !important; /* No scaling */
+  font-weight: 400 !important; /* Normal weight */
 }
 
 /* Syllable highlighting */

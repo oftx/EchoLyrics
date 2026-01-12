@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { LyricsManager } from '@/core/services/LyricsManager';
+import { LyricsManager, DisplayMode } from '@/core/services/LyricsManager';
 import { SongInformation } from '@/core/interfaces/SongInformation';
 import { NeteaseNetworkProvider } from "@/core/providers/NeteaseNetworkProvider";
 import { QQMusicNetworkProvider } from "@/core/providers/QQMusicNetworkProvider";
@@ -46,9 +46,15 @@ export default function App() {
     const [lyrics, setLyrics] = useState<LyricsData | null>(null);
     const [currentTime, setCurrentTime] = useState(0);
     const [activeLineIndex, setActiveLineIndex] = useState(-1);
-    const [currentSongSignature, setCurrentSongSignature] = useState<string>("");
+    // const [currentSongSignature, setCurrentSongSignature] = useState<string>(""); // Unused
     const [showCandidates, setShowCandidates] = useState(false);
     const [candidates, setCandidates] = useState<any[]>([]);
+    const [displayMode, setDisplayMode] = useState<DisplayMode>(manager.getDisplayMode());
+
+    const handleDisplayModeChange = (mode: DisplayMode) => {
+        manager.setDisplayMode(mode);
+        setDisplayMode(mode);
+    };
 
 
     // Playback state
@@ -186,7 +192,7 @@ export default function App() {
 
         // Generate signature for race condition check
         const signature = `${item.name}-${Date.now()}`;
-        setCurrentSongSignature(signature);
+        // setCurrentSongSignature(signature);
 
         // Fetch Metadata (Async)
         // We do this concurrently with audio loading to save time, but before lyric search.
@@ -617,6 +623,19 @@ export default function App() {
                         </button>
                     </>
                 )}
+                {lyrics && (
+                    <div className="display-mode-controls" style={{ marginLeft: 'auto' }}>
+                        <select
+                            className="select select-sm select-ghost"
+                            value={displayMode}
+                            onChange={(e) => handleDisplayModeChange(e.target.value as DisplayMode)}
+                        >
+                            <option value={DisplayMode.Original}>Original</option>
+                            <option value={DisplayMode.Translation}>Translation</option>
+                            <option value={DisplayMode.Both}>Both</option>
+                        </select>
+                    </div>
+                )}
             </div>
 
             {/* Candidates Modal/Overlay */}
@@ -795,6 +814,8 @@ export default function App() {
                                 activeLineIndex={activeLineIndex}
                                 currentTime={currentTime}
                                 autoScroll={true}
+                                displayMode={displayMode}
+                                centerRatio={0.6}
                                 onLineClick={handleLyricClick}
                             />
                         ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
@@ -829,6 +850,7 @@ export default function App() {
                                     activeLineIndex={activeLineIndex}
                                     currentTime={currentTime}
                                     autoScroll={true}
+                                    displayMode={displayMode}
                                     onLineClick={handleLyricClick}
                                 />
                             ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
@@ -848,11 +870,13 @@ export default function App() {
 }
 
 // Extracted Component for Reusability
-function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, onLineClick }: {
+function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, displayMode, centerRatio = 0.5, onLineClick }: {
     lyrics: LyricsData,
     activeLineIndex: number,
     currentTime: number,
     autoScroll: boolean,
+    displayMode: DisplayMode,
+    centerRatio?: number,
     onLineClick?: (time: number) => void
 }) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -865,17 +889,47 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, onLineCl
             // Use data-index to find the specific element corresponding to the active line index
             // This is robust against skipped/null lines not being rendered in the DOM
             const activeEl = containerRef.current.querySelector(`[data-index="${activeLineIndex}"]`) as HTMLElement;
-            if (activeEl) {
+            // If the exact index is hidden (e.g. Translation line hidden), try finding the sibling
+            // Actually, we need to find "The element that represents the active line" or "The element that is currently visual active"
+            // Our rendering logic below sets 'lyric-line--active' class. We can query that!
+            const visualActiveEl = activeEl || containerRef.current.querySelector('.lyric-line--active') as HTMLElement;
+
+            if (visualActiveEl) {
                 const container = containerRef.current.parentElement;
                 if (container) {
-                    const activeRect = activeEl.getBoundingClientRect();
+                    // Logic: Identify the "Group Leader" (Original Line)
+                    let centerTargetEl = visualActiveEl;
+
+                    // If we are centering a Translation line in Both mode, we should center the group instead.
+                    // The Translation line is usually "below" the original.
+                    // So if visualActiveEl is a translation, look at previous sibling.
+                    if (displayMode === DisplayMode.Both && visualActiveEl.classList.contains('lyric-line--translation')) {
+                        const prev = visualActiveEl.previousElementSibling as HTMLElement;
+                        if (prev && !prev.classList.contains('lyric-line--translation')) {
+                            centerTargetEl = prev;
+                        }
+                    }
+
+                    const activeRect = centerTargetEl.getBoundingClientRect();
+
+                    // Check for translation line immediately following
+                    let groupHeight = centerTargetEl.clientHeight;
+                    let groupTop = activeRect.top;
+
+                    const nextSibling = centerTargetEl.nextElementSibling as HTMLElement;
+                    if (displayMode === DisplayMode.Both && nextSibling && nextSibling.classList.contains('lyric-line--translation')) {
+                        const nextRect = nextSibling.getBoundingClientRect();
+                        const combinedBottom = Math.max(activeRect.bottom, nextRect.bottom);
+                        groupHeight = combinedBottom - activeRect.top;
+                    }
+
                     const containerRect = container.getBoundingClientRect();
                     const currentScroll = container.scrollTop;
                     const containerHeight = container.clientHeight;
-                    const activeHeight = activeEl.clientHeight;
 
-                    // Calculate the scroll position to center the element
-                    const targetScroll = currentScroll + (activeRect.top - containerRect.top) - (containerHeight / 2) + (activeHeight / 2);
+                    // Calculate the scroll position to center the GROUP
+                    // Use configurable centerRatio (default 0.5)
+                    const targetScroll = currentScroll + (groupTop - containerRect.top) - (containerHeight * centerRatio) + (groupHeight / 2);
 
                     container.scrollTo({
                         top: targetScroll,
@@ -883,14 +937,14 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, onLineCl
                     });
                 } else {
                     // Fallback if for some reason there is no parent (unlikely)
-                    activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    visualActiveEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
             }
         }
-    }, [activeLineIndex, autoScroll]);
+    }, [activeLineIndex, autoScroll, displayMode]); // Add displayMode dependency to re-scroll if mode changes
 
     return (
-        <div ref={containerRef} className="lyrics-content">
+        <div ref={containerRef} className={`lyrics-content lyrics-mode-${displayMode.toLowerCase()}`}>
             {lyrics.lines.map((line, idx) => {
                 // Skip empty lines
                 const lineText = line.syllables
@@ -898,13 +952,54 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, onLineCl
                     : (line.text || '').trim();
                 if (!lineText) return null;
 
-                const isActive = idx === activeLineIndex;
+                // Filtering Logic
+                const isOriginal = line.layer === 0 || line.layer === undefined;
+                const isTranslation = line.layer === 1;
+
+                if (displayMode === DisplayMode.Original && !isOriginal) return null;
+                if (displayMode === DisplayMode.Translation && !isTranslation) {
+                    // Special case: If NO translation lines exist at all, should we fallback? 
+                    // For now, strict filtering.
+                    return null;
+                }
+
+                let isActive = idx === activeLineIndex;
+
+                // Fix Highlight Logic: 
+                // 1. If Hidden Partner: If the "Actual Active" index is hidden (e.g. translation hidden), 
+                //    but this line is the visible partner (same timestamp), highlight this one.
+                // 2. If Both Mode: If this line is the partner of the active line (same timestamp),
+                //    ALSO highlight it.
+                if (!isActive) {
+                    const activeLine = lyrics.lines[activeLineIndex];
+                    if (activeLine && Math.abs(activeLine.startTime - line.startTime) < 50) { // < 50ms tolerance
+                        if (displayMode === DisplayMode.Both) {
+                            isActive = true;
+                        } else {
+                            // If NOT both mode, only highlight if the ACTUAL active line is hidden?
+                            // Actually, in single modes, we filtered out the other lines above.
+                            // So if we are here, we are the VISIBLE line. 
+                            // If the active index was the Invisible one, we should take the highlight.
+                            // Logic: If activeLine is NOT visible (filtered out), then WE take highlight.
+                            const activeIsOriginal = activeLine.layer === 0 || activeLine.layer === undefined;
+                            const activeIsTranslation = activeLine.layer === 1;
+
+                            const activeHidden = (displayMode === DisplayMode.Original && !activeIsOriginal) ||
+                                (displayMode === DisplayMode.Translation && !activeIsTranslation);
+
+                            if (activeHidden) {
+                                isActive = true;
+                            }
+                        }
+                    }
+                }
+
                 return (
                     <div
                         key={idx}
                         data-index={idx}
                         onClick={() => onLineClick && onLineClick(line.startTime)}
-                        className={`lyric-line ${isActive ? 'lyric-line--active' : 'lyric-line--inactive'}`}
+                        className={`lyric-line ${isActive ? 'lyric-line--active' : 'lyric-line--inactive'} ${isTranslation ? 'lyric-line--translation' : ''}`}
                     >
                         {line.syllables ? (
                             <div>
