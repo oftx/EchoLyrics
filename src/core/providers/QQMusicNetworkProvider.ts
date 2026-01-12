@@ -72,22 +72,26 @@ export class QQMusicNetworkProvider implements LyricsProvider {
                 const json = JSON.parse(jsonMatch[0]);
 
                 if (json.lyric) {
-                    // Decode Base64
-                    try {
-                        const decodedUtils = atob(json.lyric);
-                        return {
-                            id: String(track.songmid),
-                            title: track.songname,
-                            artist: track.singer ? track.singer.map((s: any) => s.name).join(", ") : "Unknown",
-                            album: track.albumname,
-                            duration: track.interval, // seconds to ms? Input seems to be seconds.
-                            lyricText: decodedUtils,
-                            source: this.name,
-                            score: 0
-                        } as LyricResult;
-                    } catch (e) {
-                        Logger.warn("Failed to decode base64 lyric", e);
+                    // Decode Base64 to binary string
+                    const binaryString = atob(json.lyric);
+                    // Convert binary string to Uint8Array
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
                     }
+                    // Decode UTF-8
+                    const decodedUtils = new TextDecoder('utf-8').decode(bytes);
+
+                    return {
+                        id: String(track.songmid),
+                        title: track.songname,
+                        artist: track.singer ? track.singer.map((s: any) => s.name).join(", ") : "Unknown",
+                        album: track.albumname,
+                        duration: track.interval, // seconds to ms? Input seems to be seconds.
+                        lyricText: decodedUtils, // Use correctly decoded text
+                        source: this.name,
+                        score: 0
+                    } as LyricResult;
                 }
             } catch (e) {
                 Logger.warn(`[QQMusic] Error fetching lyric for ${track.songmid}`, e);
