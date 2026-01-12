@@ -370,7 +370,7 @@ export class LyricsManager {
         }
     }
 
-    private loadCache(): Record<string, { results: any[], selectedId: string | null }> {
+    private loadCache(): Record<string, { results: any[], selectedId: string | null, lastAccessed?: number }> {
         try {
             const raw = localStorage.getItem(this.STORAGE_KEY);
             return raw ? JSON.parse(raw) : {};
@@ -380,13 +380,88 @@ export class LyricsManager {
     }
 
     private saveCache(key: string, results: any[], selectedId: string | null) {
+        // Optimize: Only save the top N results to save space
+        // Always keep the selected one if it exists
+        let resultsToSave = results;
+        if (results.length > 5) {
+            if (selectedId) {
+                const selected = results.find(r => r.id === selectedId);
+                const others = results.filter(r => r.id !== selectedId).slice(0, 4);
+                resultsToSave = selected ? [selected, ...others] : results.slice(0, 5);
+            } else {
+                resultsToSave = results.slice(0, 5);
+            }
+        }
+
+        // Don't save full text for non-selected items? 
+        // No, we might want to switch to them. But maybe we can truncate if needed.
+        // For now, limiting count is a huge win (15 -> 5).
+
+        const entry = {
+            results: resultsToSave,
+            selectedId,
+            lastAccessed: Date.now()
+        };
+
         try {
             const cache = this.loadCache();
-            cache[key] = { results, selectedId };
-            // Simple LRU or limit? For now just unbound.
+            cache[key] = entry;
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(cache));
+        } catch (e: any) {
+            if (e.name === 'QuotaExceededError' || e.code === 22 || e.number === -2147024882) {
+                Logger.warn("[LyricsManager] Storage quota exceeded. Pruning cache...");
+                if (this.pruneCache()) {
+                    // Retry once
+                    try {
+                        const cache = this.loadCache();
+                        cache[key] = entry;
+                        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(cache));
+                        Logger.info("[LyricsManager] Cache saved after pruning.");
+                    } catch (retryError) {
+                        Logger.error("[LyricsManager] Failed to save cache even after pruning.", retryError);
+                    }
+                } else {
+                    Logger.error("[LyricsManager] Could not prune enough space to save cache.");
+                }
+            } else {
+                console.error("Failed to save lyric cache", e);
+            }
+        }
+    }
+
+    /**
+     * Removes old entries to free up space.
+     * Returns true if anything was removed.
+     */
+    private pruneCache(): boolean {
+        try {
+            const cache = this.loadCache();
+            const keys = Object.keys(cache);
+            if (keys.length === 0) return false;
+
+            // Sort by lastAccessed (oldest first)
+            // If lastAccessed is missing, treat as very old (0)
+            const entries = keys.map(k => ({
+                key: k,
+                lastAccessed: cache[k].lastAccessed || 0
+            }));
+
+            entries.sort((a, b) => a.lastAccessed - b.lastAccessed);
+
+            // Remove oldest 20%
+            const deleteCount = Math.max(1, Math.floor(entries.length * 0.2));
+            const toDelete = entries.slice(0, deleteCount);
+
+            toDelete.forEach(item => {
+                delete cache[item.key];
+            });
+
+            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(cache));
+            Logger.info(`[LyricsManager] Pruned ${deleteCount} entries from cache.`);
+            return true;
         } catch (e) {
-            console.error("Failed to save lyric cache", e);
+            Logger.error("[LyricsManager] Error while pruning cache", e);
+            return false;
         }
     }
 
@@ -404,10 +479,16 @@ export class LyricsManager {
             const cache = this.loadCache();
             const cachedEntry = cache[persistenceKey];
 
-            if (cachedEntry && cachedEntry.results && cachedEntry.selectedId) {
-                // Find the selected result
-                const selected = cachedEntry.results.find((r: any) => r.id === cachedEntry.selectedId);
-                return selected || null;
+            if (cachedEntry) {
+                // Update access time (lazy update)
+                // We don't save immediately to avoid write thrashing on every read, 
+                // but strictly speaking we should. 
+                // Let's rely on saveCache happening on selection or search updates.
+
+                if (cachedEntry.results && cachedEntry.selectedId) {
+                    const selected = cachedEntry.results.find((r: any) => r.id === cachedEntry.selectedId);
+                    return selected || null;
+                }
             }
         } catch (e) {
             console.error("Error reading cache", e);
