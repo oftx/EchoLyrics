@@ -911,8 +911,11 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, displayM
     // Auto-scroll for PiP mode (Since main window uses its own ref logic, we probably want self-contained logic here too)
     // The main window logic was doing `lyricsContainerRef` scrolling.
 
+    const isUserScrolling = useRef(false);
+    const userScrollTimeout = useRef<NodeJS.Timeout | null>(null);
+
     const scrollToActive = useCallback(() => {
-        if (!containerRef.current) return;
+        if (!containerRef.current || isUserScrolling.current) return;
 
         const activeEl = containerRef.current.querySelector(`[data-index="${activeLineIndex}"]`) as HTMLElement;
         const visualActiveEl = activeEl || containerRef.current.querySelector('.lyric-line--active') as HTMLElement;
@@ -992,6 +995,37 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, displayM
         resizeObserver.observe(container);
         return () => resizeObserver.disconnect();
     }, [autoScroll, activeLineIndex, scrollToActive]);
+
+    // User Interaction Listener
+    useEffect(() => {
+        const container = containerRef.current?.parentElement;
+        if (!container) return;
+
+        const handleUserInteration = () => {
+            isUserScrolling.current = true;
+            if (userScrollTimeout.current) {
+                clearTimeout(userScrollTimeout.current);
+            }
+            userScrollTimeout.current = setTimeout(() => {
+                isUserScrolling.current = false;
+                // Optional: Snap back immediately? Or wait for next time update?
+                // Let's ensure it snaps back if needed
+                // scrollToActive(); 
+            }, 750);
+        };
+
+        container.addEventListener('wheel', handleUserInteration, { passive: true });
+        container.addEventListener('touchstart', handleUserInteration, { passive: true });
+        // Also listen for mousedown on scrollbar
+        container.addEventListener('mousedown', handleUserInteration, { passive: true });
+
+        return () => {
+            container.removeEventListener('wheel', handleUserInteration);
+            container.removeEventListener('touchstart', handleUserInteration);
+            container.removeEventListener('mousedown', handleUserInteration);
+            if (userScrollTimeout.current) clearTimeout(userScrollTimeout.current);
+        };
+    }, []);
 
     return (
         <>
