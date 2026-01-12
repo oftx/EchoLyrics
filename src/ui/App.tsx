@@ -308,21 +308,11 @@ export default function App() {
         setStatusMsg("Error playing audio: " + (error?.message || "Unknown error"));
     };
 
-    const handleNext = () => {
+    // Auto-next when audio ends
+    const handleAudioEnded = () => {
         if (currentIndex < playlist.length - 1) {
             playTrack(playlist[currentIndex + 1], currentIndex + 1);
         }
-    };
-
-    const handlePrev = () => {
-        if (currentIndex > 0) {
-            playTrack(playlist[currentIndex - 1], currentIndex - 1);
-        }
-    };
-
-    // Auto-next when audio ends
-    const handleAudioEnded = () => {
-        handleNext();
     };
 
     const togglePiP = async () => {
@@ -573,20 +563,90 @@ export default function App() {
                 </div>
             )}
 
-            {/* Playback Controls */}
+            {/* Song Info Header - MOVED UP */}
             {audioSrc && (
-                <div className="controls-bar">
-                    <button className="btn btn-secondary" onClick={handlePrev} disabled={currentIndex <= 0}>
-                        ← Prev
-                    </button>
-                    <button className="btn btn-secondary" onClick={handleNext} disabled={currentIndex >= playlist.length - 1}>
-                        Next →
-                    </button>
+                <div className="song-info">
+                    <h2 className="song-title">{lyrics?.metadata?.title || searchTitle || 'Unknown Title'}</h2>
+                    <p className="song-artist">{lyrics?.metadata?.artist || searchArtist || 'Unknown Artist'}</p>
                 </div>
             )}
 
-            {/* Search Controls */}
-            <div className="search-controls">
+            {/* Main Lyrics View - MOVED UP */}
+            {/* Render conditional to prevent showing empty container if no song/lyrics? Or just standard view */}
+            {/* Keeping original logic: always render container, content depends on state */}
+            <div
+                className="lyrics-container"
+            >
+                {pipWindow ? (
+                    <div className="lyrics-pip-message">
+                        <p>Lyrics are displayed in the pop-out window.</p>
+                        <button className="btn btn-secondary" onClick={togglePiP}>
+                            Restore Lyrics to Main Window
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        <button
+                            className="btn btn-ghost btn-sm lyrics-popout-btn"
+                            onClick={togglePiP}
+                        >
+                            Pop Out Lyrics
+                        </button>
+                        <div className="lyrics-scroller no-scrollbar" ref={lyricsContainerRef}>
+                            {lyrics ? (
+                                <LyricsList
+                                    lyrics={lyrics}
+                                    activeLineIndex={activeLineIndex}
+                                    currentTime={currentTime}
+                                    autoScroll={true}
+                                    displayMode={displayMode}
+                                    centerRatio={0.5} // Explicitly set for main view too if needed, or default
+                                    onLineClick={handleLyricClick}
+                                />
+                            ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* PiP Portal - Keep logical definition here or at bottom. Does not affect layout. */}
+            {pipWindow ? (
+                createPortal(
+                    <div className="no-scrollbar" ref={pipContainerRef} style={{
+                        height: '100vh',
+                        width: '100%',
+                        background: 'var(--bg-base)',
+                        color: 'var(--text-primary)',
+                        overflowY: 'auto',
+                        padding: 'var(--space-5)',
+                        boxSizing: 'border-box'
+                    }}>
+                        <div className="pip-header">
+                            <h2 className="pip-title">
+                                {lyrics?.metadata?.title || searchTitle || "Lyrics"}
+                            </h2>
+                            <div className="pip-artist">
+                                {lyrics?.metadata?.artist || searchArtist || ""}
+                            </div>
+                        </div>
+                        {lyrics ? (
+                            <LyricsList
+                                lyrics={lyrics}
+                                activeLineIndex={activeLineIndex}
+                                currentTime={currentTime}
+                                autoScroll={true}
+                                displayMode={displayMode}
+                                centerRatio={0.5}
+                                onLineClick={handleLyricClick}
+                            />
+                        ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
+                    </div>,
+                    pipWindow.document.body
+                )
+            ) : null}
+
+            {/* Search Controls - MOVED DOWN */}
+            <div className="search-controls" style={{ marginTop: 'var(--space-5)' }}>
                 <input
                     type="text"
                     className="input"
@@ -630,7 +690,7 @@ export default function App() {
                 <button className="btn btn-ghost" onClick={() => setShowExportModal(true)}>Export Lyrics</button>
             </div>
 
-            {/* Status Bar */}
+            {/* Status Bar - MOVED DOWN */}
             <div className="status-bar">
                 <span>{statusMsg}</span>
                 {lyrics && lyrics.metadata && lyrics.metadata['source'] && (
@@ -658,7 +718,7 @@ export default function App() {
                 )}
             </div>
 
-            {/* Candidates Modal/Overlay */}
+            {/* Candidates Modal - Keep near status bar contextually */}
             {showCandidates && (
                 <div className="modal-overlay" onClick={() => setShowCandidates(false)}>
                     <div
@@ -685,7 +745,7 @@ export default function App() {
                 </div>
             )}
 
-            {/* Audio Player */}
+            {/* Audio Player - MOVED DOWN */}
             {audioSrc && (
                 <div className="audio-player-wrapper">
                     <audio
@@ -775,7 +835,7 @@ export default function App() {
                 </div>
             )}
 
-            {/* Logs Viewer - Collapsible */}
+            {/* Logs Viewer - MOVED TO BOTTOM */}
             <div className={`log-panel ${showLogs ? 'log-panel--open' : 'log-panel--closed'}`}>
                 <div
                     className="log-panel-header"
@@ -804,87 +864,6 @@ export default function App() {
                 )}
             </div>
 
-            {/* Song Info Header */}
-            {audioSrc && (
-                <div className="song-info">
-                    <h2 className="song-title">{lyrics?.metadata?.title || searchTitle || 'Unknown Title'}</h2>
-                    <p className="song-artist">{lyrics?.metadata?.artist || searchArtist || 'Unknown Artist'}</p>
-                </div>
-            )}
-
-            {/* Divider Line */}
-
-
-            {/* Lyrics View - Rendered conditionally into PiP or Main */}
-            {pipWindow ? (
-                createPortal(
-                    <div className="no-scrollbar" ref={pipContainerRef} style={{
-                        height: '100vh',
-                        width: '100%',
-                        background: 'var(--bg-base)',
-                        color: 'var(--text-primary)',
-                        overflowY: 'auto',
-                        padding: 'var(--space-5)',
-                        boxSizing: 'border-box'
-                    }}>
-                        <div className="pip-header">
-                            <h2 className="pip-title">
-                                {lyrics?.metadata?.title || searchTitle || "Lyrics"}
-                            </h2>
-                            <div className="pip-artist">
-                                {lyrics?.metadata?.artist || searchArtist || ""}
-                            </div>
-                        </div>
-                        {lyrics ? (
-                            <LyricsList
-                                lyrics={lyrics}
-                                activeLineIndex={activeLineIndex}
-                                currentTime={currentTime}
-                                autoScroll={true}
-                                displayMode={displayMode}
-                                centerRatio={0.5}
-                                onLineClick={handleLyricClick}
-                            />
-                        ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
-                    </div>,
-                    pipWindow.document.body
-                )
-            ) : null}
-
-            {/* Main Lyrics View */}
-            <div
-                className="lyrics-container"
-            >
-                {pipWindow ? (
-                    <div className="lyrics-pip-message">
-                        <p>Lyrics are displayed in the pop-out window.</p>
-                        <button className="btn btn-secondary" onClick={togglePiP}>
-                            Restore Lyrics to Main Window
-                        </button>
-                    </div>
-                ) : (
-                    <>
-                        <button
-                            className="btn btn-ghost btn-sm lyrics-popout-btn"
-                            onClick={togglePiP}
-                        >
-                            Pop Out Lyrics
-                        </button>
-                        <div className="lyrics-scroller no-scrollbar" ref={lyricsContainerRef}>
-                            {lyrics ? (
-                                <LyricsList
-                                    lyrics={lyrics}
-                                    activeLineIndex={activeLineIndex}
-                                    currentTime={currentTime}
-                                    autoScroll={true}
-                                    displayMode={displayMode}
-                                    onLineClick={handleLyricClick}
-                                />
-                            ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
-                        </div>
-                    </>
-                )}
-            </div>
             {/* Export Modal */}
             <ExportManagerModal
                 isOpen={showExportModal}
