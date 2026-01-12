@@ -68,7 +68,8 @@ export class SearchQueryResolver {
 
             // If the best match is less than 0.8 similar, we assume the user input is "different enough"
             // to warrant being treated as an explicit search (Manual Override)
-            if (maxSim < 0.8) {
+            // CRITICAL FIX: Only if inputTitle is NOT empty. If it's empty, we must trust the MB result.
+            if (inputTitle && maxSim < 0.8) {
                 Logger.info(`[SearchResolver] Detected Manual Override/Mismatch (Max Similarity: ${maxSim.toFixed(2)}). Prioritizing input over MB results.`);
                 isManualOverride = true;
             }

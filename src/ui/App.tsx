@@ -11,6 +11,7 @@ import { Logger, LogEntry } from '@/core/utils/Logger';
 import { ExportManagerModal } from './components/ExportManagerModal';
 
 import { MetadataService } from '@/core/services/MetadataService';
+import { SearchQueryResolver } from '@/core/utils/SearchQueryResolver';
 
 interface PlaylistItem {
     name: string;
@@ -451,7 +452,61 @@ export default function App() {
 
 
     const handleSearch = async () => {
-        if (!searchTitle) return;
+        let finalTitle = searchTitle;
+        let finalArtist = searchArtist;
+
+        // Optimized: If title or artist is empty, try to fill from MusicBrainz
+        if ((!finalTitle || !finalArtist) && currentIndex >= 0 && currentIndex < playlist.length) {
+            const currentItem = playlist[currentIndex];
+            if (currentItem.isrc) {
+                setStatusMsg("Fetching info from MusicBrainz...");
+                try {
+                    const resolver = new SearchQueryResolver();
+                    // Use a temporary object for resolution
+                    const tempInfo: SongInformation = {
+                        title: finalTitle || "",
+                        artists: [finalArtist || ""],
+                        album: "",
+                        duration: 0,
+                        sourceId: "temp",
+                        isrc: currentItem.isrc
+                    };
+
+                    const results = await resolver.resolveQueries(tempInfo);
+                    if (results.length > 0) {
+                        const best = results[0];
+                        // If one field was empty, fill it. 
+                        // Note: resolveQueries returns prioritized results.
+                        if (!finalTitle && best.title) {
+                            finalTitle = best.title;
+                            setSearchTitle(finalTitle);
+                        }
+                        if (!finalArtist && best.artist) {
+                            finalArtist = best.artist;
+                            setSearchArtist(finalArtist);
+                        }
+                        if (finalTitle || finalArtist) {
+                            setStatusMsg("Info updated from MusicBrainz.");
+                        }
+                    } else {
+                        setStatusMsg("No info found on MusicBrainz.");
+                    }
+                } catch (e) {
+                    console.warn("MB Auto-fill failed", e);
+                    setStatusMsg("MusicBrainz lookup failed.");
+                }
+            }
+        }
+
+        if (!finalTitle) {
+            if (currentIndex >= 0 && playlist[currentIndex]?.isrc) {
+                setStatusMsg("Could not info from MusicBrainz. Please enter manually.");
+            } else {
+                setStatusMsg("Please enter a title.");
+            }
+            return;
+        }
+
         setStatusMsg("Searching...");
         setLyrics(null);
 
@@ -462,8 +517,8 @@ export default function App() {
         }
 
         const song: SongInformation = {
-            title: searchTitle,
-            artists: [searchArtist],
+            title: finalTitle,
+            artists: [finalArtist],
             album: "",
             duration: audioRef.current?.duration ? audioRef.current.duration * 1000 : 0,
             sourceId: "local",
