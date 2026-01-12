@@ -9,7 +9,7 @@ import { LRCLibNetworkProvider } from "@/core/providers/LRCLibNetworkProvider";
 import { LyricsData } from '@/core/models/LyricsData';
 import { Logger, LogEntry } from '@/core/utils/Logger';
 import { ExportManagerModal } from './components/ExportManagerModal';
-import { FFmpegConverter } from '@/core/services/FFmpegConverter';
+
 import { MetadataService } from '@/core/services/MetadataService';
 
 interface PlaylistItem {
@@ -23,7 +23,7 @@ interface PlaylistItem {
 
 // Singleton instance for the app
 const manager = new LyricsManager();
-const converter = new FFmpegConverter();
+
 const metadataService = new MetadataService();
 
 // ... existing registerProviders ...
@@ -288,6 +288,9 @@ export default function App() {
             setStatusMsg("Format not native. Transcoding with FFmpeg...");
             setIsConverting(true);
             try {
+                // Dynamic import for code splitting
+                const { FFmpegConverter } = await import('@/core/services/FFmpegConverter');
+                const converter = new FFmpegConverter();
                 const result = await converter.convertToWav(currentItem.audioFile);
                 const wavUrl = URL.createObjectURL(result.blob);
                 setAudioSrc(wavUrl);
