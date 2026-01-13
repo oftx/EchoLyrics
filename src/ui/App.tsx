@@ -12,7 +12,7 @@ import { ExportManagerModal } from './components/ExportManagerModal';
 
 import { MetadataService } from '@/core/services/MetadataService';
 import { SearchQueryResolver } from '@/core/utils/SearchQueryResolver';
-
+import { LyricTypeDetector } from '@/core/utils/LyricTypeDetector';
 
 interface PlaylistItem {
     name: string;
@@ -820,17 +820,51 @@ export default function App() {
                             <h3 className="modal-title">Select Lyrics</h3>
                         </div>
                         <div className="modal-body">
-                            {candidates.map((cand, idx) => (
-                                <div
-                                    key={idx}
-                                    onClick={() => handleSelectCandidate(idx)}
-                                    className="candidate-item"
-                                >
-                                    <div className="candidate-title">{cand.title}</div>
-                                    <div className="candidate-artist">{cand.artist}</div>
-                                    <div className="candidate-source">{cand.source}</div>
-                                </div>
-                            ))}
+                            {candidates.map((cand, idx) => {
+                                // Detect lyric types
+                                const types = LyricTypeDetector.getLyricTypes(cand.lyricText, cand.translationText);
+
+                                // Check if this is the currently selected lyric
+                                const isCurrentlySelected = lyrics?.metadata?.['source'] === cand.source &&
+                                    lyrics?.metadata?.['title'] === cand.title &&
+                                    lyrics?.metadata?.['artist'] === cand.artist;
+
+                                return (
+                                    <div
+                                        key={idx}
+                                        onClick={() => handleSelectCandidate(idx)}
+                                        className={`candidate-item ${isCurrentlySelected ? 'candidate-item--selected' : ''}`}
+                                    >
+                                        <div className="candidate-main">
+                                            <div className="candidate-title">{cand.title}</div>
+                                            <div className="candidate-artist">{cand.artist}</div>
+                                            <div className="candidate-source">{cand.source}</div>
+                                        </div>
+                                        <div className="candidate-badges">
+                                            {isCurrentlySelected && (
+                                                <span className="candidate-badge candidate-badge--selected" title="Currently playing">
+                                                    ✓
+                                                </span>
+                                            )}
+                                            {types.hasTranslation && (
+                                                <span className="candidate-badge candidate-badge--translation" title="Has translation">
+                                                    🌐
+                                                </span>
+                                            )}
+                                            {types.hasKaraoke && (
+                                                <span className="candidate-badge candidate-badge--karaoke" title="Word-by-word karaoke">
+                                                    🎤
+                                                </span>
+                                            )}
+                                            {types.isPlainText && (
+                                                <span className="candidate-badge candidate-badge--plaintext" title="Plain text (unsynced)">
+                                                    📄
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
