@@ -713,20 +713,34 @@ export default function App() {
 
             {/* Search Controls - MOVED DOWN */}
             <div className="search-controls" style={{ marginTop: 'var(--space-5)' }}>
-                <input
-                    type="text"
-                    className="input"
-                    placeholder="Title"
-                    value={searchTitle}
-                    onChange={e => setSearchTitle(e.target.value)}
-                />
-                <input
-                    type="text"
-                    className="input"
-                    placeholder="Artist"
-                    value={searchArtist}
-                    onChange={e => setSearchArtist(e.target.value)}
-                />
+                <div className="input-wrapper">
+                    <input
+                        type="text"
+                        className="input input-with-clear"
+                        placeholder="Title"
+                        value={searchTitle}
+                        onChange={e => setSearchTitle(e.target.value)}
+                    />
+                    {searchTitle && (
+                        <button className="input-clear-btn" onClick={() => setSearchTitle('')} title="Clear">
+                            ✕
+                        </button>
+                    )}
+                </div>
+                <div className="input-wrapper">
+                    <input
+                        type="text"
+                        className="input input-with-clear"
+                        placeholder="Artist"
+                        value={searchArtist}
+                        onChange={e => setSearchArtist(e.target.value)}
+                    />
+                    {searchArtist && (
+                        <button className="input-clear-btn" onClick={() => setSearchArtist('')} title="Clear">
+                            ✕
+                        </button>
+                    )}
+                </div>
                 <div className="number-stepper">
                     <button
                         type="button"
