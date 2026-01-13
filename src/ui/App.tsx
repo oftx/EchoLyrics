@@ -13,6 +13,7 @@ import { ExportManagerModal } from './components/ExportManagerModal';
 import { MetadataService } from '@/core/services/MetadataService';
 import { SearchQueryResolver } from '@/core/utils/SearchQueryResolver';
 
+
 interface PlaylistItem {
     name: string;
     audioFile: File;
@@ -1153,14 +1154,29 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, displayM
                                         const isSylActive = currentTime >= sylAbsStart && currentTime < sylAbsEnd;
 
                                         let sylClass = 'lyric-syllable';
+                                        let opacityStyle: React.CSSProperties = {};
+
                                         if (isActive) {
-                                            if (isSylPassed) sylClass += ' lyric-syllable--passed';
-                                            else if (isSylActive) sylClass += ' lyric-syllable--active';
-                                            else sylClass += ' lyric-syllable--upcoming';
+                                            if (isSylPassed) {
+                                                sylClass += ' lyric-syllable--passed';
+                                                // Fully visible
+                                                opacityStyle.opacity = 1;
+                                            } else if (isSylActive) {
+                                                sylClass += ' lyric-syllable--active';
+                                                // Calculate progress through this syllable (0 to 1)
+                                                const progress = (currentTime - sylAbsStart) / syl.duration;
+                                                // Map progress to opacity: 0.5 → 1.0
+                                                const opacity = 0.5 + (progress * 0.5);
+                                                opacityStyle.opacity = Math.min(1, Math.max(0.5, opacity));
+                                            } else {
+                                                sylClass += ' lyric-syllable--upcoming';
+                                                // Dimmed
+                                                opacityStyle.opacity = 0.5;
+                                            }
                                         }
 
                                         return (
-                                            <span key={sylIdx} className={sylClass}>
+                                            <span key={sylIdx} className={sylClass} style={opacityStyle}>
                                                 {syl.text}
                                             </span>
                                         );
