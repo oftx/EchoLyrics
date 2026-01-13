@@ -48,6 +48,7 @@ export default function App() {
     const [lyrics, setLyrics] = useState<LyricsData | null>(null);
     const [currentTime, setCurrentTime] = useState(0);
     const [activeLineIndex, setActiveLineIndex] = useState(-1);
+    const [lyricOffset, setLyricOffset] = useState(0); // Global offset in ms
     // const [currentSongSignature, setCurrentSongSignature] = useState<string>(""); // Unused
     const [showCandidates, setShowCandidates] = useState(false);
     const [candidates, setCandidates] = useState<any[]>([]);
@@ -196,7 +197,7 @@ export default function App() {
     const playTrack = async (item: PlaylistItem, index: number) => {
         // Cleanup previous
         setLyrics(null);
-        setCurrentTime(0);
+        setCurrentTime(-lyricOffset); // Initial synced time
         setIsConverting(false); // Reset
         setActiveLineIndex(-1);
         if (lyricsContainerRef.current) lyricsContainerRef.current.scrollTo(0, 0);
@@ -377,7 +378,11 @@ export default function App() {
     // Seek handler
     const handleLyricClick = (startTime: number) => {
         if (audioRef.current) {
-            audioRef.current.currentTime = startTime / 1000;
+            // startTime is the desired Synced Time
+            // RealTime = SyncedTime + Offset
+            const targetRealTime = startTime + lyricOffset;
+            audioRef.current.currentTime = targetRealTime / 1000;
+
             setCurrentTime(startTime);
             // Instant update of active index
             if (lyrics) {
@@ -542,11 +547,13 @@ export default function App() {
     // Sync loop using audio event
     const handleTimeUpdate = () => {
         if (audioRef.current) {
-            const t = audioRef.current.currentTime * 1000;
-            setCurrentTime(t);
+            const realTime = audioRef.current.currentTime * 1000;
+            const syncedTime = realTime - lyricOffset;
+
+            setCurrentTime(syncedTime);
             // Sync lyrics
             if (lyrics) {
-                const idx = manager.getSynchronizer().findLineIndex(lyrics, t);
+                const idx = manager.getSynchronizer().findLineIndex(lyrics, syncedTime);
                 setActiveLineIndex(idx);
             }
         }
@@ -752,6 +759,31 @@ export default function App() {
             {/* Status Bar - MOVED DOWN */}
             <div className="status-bar">
                 <span>{statusMsg}</span>
+                {/* Offset Controls */}
+                {lyrics && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 'var(--space-3)', borderRight: '1px solid var(--border-subtle)', paddingRight: 'var(--space-3)' }}>
+                        <span style={{ fontSize: 'var(--text-xs)' }}>Offset:</span>
+                        <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ padding: '0 6px', height: '24px', minHeight: 'unset' }}
+                            onClick={() => setLyricOffset(o => o - 100)}
+                            title="Advance lyrics (Lyrics appear ealier)"
+                        >
+                            −
+                        </button>
+                        <span style={{ fontSize: 'var(--text-xs)', minWidth: '50px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', cursor: 'pointer' }} onClick={() => setLyricOffset(0)} title="Click to reset">
+                            {lyricOffset > 0 ? '+' : ''}{lyricOffset}ms
+                        </span>
+                        <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ padding: '0 6px', height: '24px', minHeight: 'unset' }}
+                            onClick={() => setLyricOffset(o => o + 100)}
+                            title="Delay lyrics (Lyrics appear later)"
+                        >
+                            +
+                        </button>
+                    </div>
+                )}
                 {lyrics && lyrics.metadata && lyrics.metadata['source'] && (
                     <>
                         <span className="status-badge">
@@ -845,21 +877,23 @@ export default function App() {
                                 )}
                             </button>
                             <span className="custom-player-time">
-                                {formatTime(currentTime / 1000)} / {formatTime(audioDuration)}
+                                {formatTime((currentTime + lyricOffset) / 1000)} / {formatTime(audioDuration)}
                             </span>
                             <input
                                 type="range"
                                 className="custom-player-progress"
                                 min={0}
                                 max={audioDuration || 100}
-                                value={currentTime / 1000}
+                                value={(currentTime + lyricOffset) / 1000}
                                 onChange={(e) => {
                                     if (audioRef.current) {
                                         const t = parseFloat(e.target.value);
                                         audioRef.current.currentTime = t;
-                                        setCurrentTime(t * 1000);
+
+                                        const synced = (t * 1000) - lyricOffset;
+                                        setCurrentTime(synced);
                                         if (lyrics) {
-                                            const idx = manager.getSynchronizer().findLineIndex(lyrics, t * 1000);
+                                            const idx = manager.getSynchronizer().findLineIndex(lyrics, synced);
                                             setActiveLineIndex(idx);
                                         }
                                     }
