@@ -93,10 +93,55 @@ export class QrcParser implements LyricsParser {
             return { lines: [], metadata: {}, isSynced: false };
         }
 
+        // Post-process: Match translation lines (Layer 1) to their closest QRC line (Layer 0)
+        // by timestamp proximity, and align their timestamps for correct pairing
+        const qrcLines = lines.filter(l => l.layer === 0);
+        const translationLines = lines.filter(l => l.layer === 1);
+
+        const TIMESTAMP_TOLERANCE = 300; // 300ms tolerance for matching
+
+        // For each translation, find the closest QRC line and snap to its timestamp
+        const matched = new Set<number>();
+        translationLines.forEach(trans => {
+            let closestIdx = -1;
+            let minDiff = Infinity;
+
+            qrcLines.forEach((qrc, idx) => {
+                const diff = Math.abs(qrc.startTime - trans.startTime);
+                if (diff < minDiff && diff <= TIMESTAMP_TOLERANCE) {
+                    minDiff = diff;
+                    closestIdx = idx;
+                }
+            });
+
+            if (closestIdx !== -1 && !matched.has(closestIdx)) {
+                // Snap translation timestamp to match QRC timestamp exactly
+                matched.add(closestIdx);
+                trans.startTime = qrcLines[closestIdx].startTime;
+            }
+        });
+
+        // Remove unmatched translations (orphaned) and combine
+        const finalLines = [
+            ...qrcLines,
+            ...translationLines.filter(trans => {
+                // Keep only translations that were matched
+                return qrcLines.some(qrc => qrc.startTime === trans.startTime);
+            })
+        ];
+
+        // Sort: First by timestamp, then by layer (0 before 1)
+        finalLines.sort((a, b) => {
+            if (a.startTime === b.startTime) {
+                return (a.layer || 0) - (b.layer || 0);
+            }
+            return a.startTime - b.startTime;
+        });
+
         return {
-            lines,
+            lines: finalLines,
             metadata,
-            isSynced: lines.length > 0
+            isSynced: finalLines.length > 0
         };
     }
 }
