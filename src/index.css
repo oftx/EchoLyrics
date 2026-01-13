@@ -713,7 +713,6 @@ body {
 /* Syllable highlighting */
 .lyric-syllable {
   display: inline-block;
-  margin-right: 4px;
   transition: color 50ms linear;
 }
 
