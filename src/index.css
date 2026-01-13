@@ -714,6 +714,7 @@ body {
 .lyric-syllable {
   display: inline-block;
   transition: opacity 150ms ease-out;
+  white-space: pre-wrap;
 }
 
 /* Only apply purple color to syllables in active lines */
