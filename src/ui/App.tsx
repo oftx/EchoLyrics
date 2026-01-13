@@ -83,6 +83,10 @@ export default function App() {
 
     const audioRef = useRef<HTMLAudioElement>(null);
     const lyricsContainerRef = useRef<HTMLDivElement>(null);
+
+    // Album Art State
+    const [albumArtUrl, setAlbumArtUrl] = useState<string | null>(null);
+    const [showAlbumArt, setShowAlbumArt] = useState(true);
     const pipContainerRef = useRef<HTMLDivElement>(null);
     const logContainerRef = useRef<HTMLDivElement>(null);
 
@@ -222,12 +226,23 @@ export default function App() {
         let metaArtist = item.artist;
         let embeddedLyrics = null;
 
+        // Cleanup previous album art
+        if (albumArtUrl) {
+            URL.revokeObjectURL(albumArtUrl);
+            setAlbumArtUrl(null);
+        }
+
         try {
             const metadata = await metadataService.parse(item.audioFile, { deepScan: false });
             if (metadata.title) metaTitle = metadata.title;
             if (metadata.artist) metaArtist = metadata.artist;
             if (metadata.lyrics) embeddedLyrics = metadata.lyrics;
             if (metadata.isrc) item.isrc = metadata.isrc;
+
+            if (metadata.picture) {
+                const artUrl = URL.createObjectURL(metadata.picture);
+                setAlbumArtUrl(artUrl);
+            }
 
             // Update the playlist item in place (optional, for caching in session)
             item.title = metaTitle;
@@ -632,8 +647,30 @@ export default function App() {
             {/* Song Info Header - MOVED UP */}
             {audioSrc && (
                 <div className="song-info">
-                    <h2 className="song-title">{lyrics?.metadata?.title || searchTitle || 'Unknown Title'}</h2>
-                    <p className="song-artist">{lyrics?.metadata?.artist || searchArtist || 'Unknown Artist'}</p>
+                    {showAlbumArt && (
+                        <div className="album-art-container">
+                            {albumArtUrl ? (
+                                <img src={albumArtUrl} alt="Album Art" className="album-art" />
+                            ) : (
+                                <div className="album-art-placeholder">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                        <circle cx="8.5" cy="8.5" r="1.5" />
+                                        <polyline points="21 15 16 10 5 21" />
+                                    </svg>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    <h2
+                        className="song-title"
+                        onClick={() => setShowAlbumArt(!showAlbumArt)}
+                        title="Click to toggle album art"
+                        style={{ cursor: 'pointer' }}
+                    >
+                        {lyrics?.metadata?.title || searchTitle || "No Title"}
+                    </h2>
+                    <p className="song-artist">{lyrics?.metadata?.artist || searchArtist || "Unknown Artist"}</p>
                 </div>
             )}
 

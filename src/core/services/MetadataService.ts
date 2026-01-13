@@ -28,6 +28,11 @@ export class MetadataService {
             if (common.title) result.title = common.title;
             if (common.artist) result.artist = common.artist;
             if (common.album) result.album = common.album;
+            if (common.picture && common.picture.length > 0) {
+                // Use the first picture found
+                const data = new Uint8Array(common.picture[0].data);
+                result.picture = new Blob([data], { type: common.picture[0].format });
+            }
             if (common.isrc && common.isrc.length > 0) {
                 result.isrc = common.isrc[0];
                 Logger.info(`[Metadata] Found ISRC: ${result.isrc}`);
