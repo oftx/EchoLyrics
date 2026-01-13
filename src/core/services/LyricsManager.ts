@@ -9,6 +9,8 @@ import { SongInformation } from "../interfaces/SongInformation";
 
 
 
+import { QrcParser } from "../parsers/QrcParser";
+
 export enum DisplayMode {
     Original = "Original",
     Translation = "Translation",
@@ -23,7 +25,8 @@ export class LyricsManager {
     private searcher = new LyricsSearcherService();
     private synchronizer = new PlaybackSynchronizer();
     private parsers: LyricsParser[] = [
-        new EnhancedLrcParser(), // Try enhanced first
+        new QrcParser(),      // Check for specialized QRC first
+        new EnhancedLrcParser(),
         new StandardLrcParser()
     ];
 
@@ -76,14 +79,28 @@ export class LyricsManager {
      * @param text Raw lyrics text.
      */
     public parse(text: string): LyricsData {
-        // Try all parsers. In reality, we might check format first.
-        // EnhancedParser falls back to Standard if no tags found (implemented in EnhancedLrcParser),
-        // so we can just use EnhancedParser as primary.
-        const parser = this.parsers[0];
-        const data = parser.parse(text);
-        this.currentLyrics = data;
+        let bestData: LyricsData | null = null;
+
+        for (const parser of this.parsers) {
+            try {
+                const data = parser.parse(text);
+                if (data.isSynced && data.lines.length > 0) {
+                    bestData = data;
+                    break;
+                }
+                // Keep the result even if not synced if it's the only one
+                if (!bestData) bestData = data;
+            } catch (e) {
+                Logger.warn("Parser failed", e);
+            }
+        }
+
+        // If all failed or no synced found, use the last valid one or empty
+        const finalData = bestData || { lines: [], metadata: {}, isSynced: false };
+
+        this.currentLyrics = finalData;
         this.notifyListeners();
-        return data;
+        return finalData;
     }
 
 

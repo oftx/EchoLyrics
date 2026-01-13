@@ -4,9 +4,13 @@ import { LyricResult } from "../interfaces/LyricResult";
 import { SongInformation } from "../interfaces/SongInformation";
 import { SearchQueryResolver } from "../utils/SearchQueryResolver";
 
+
 export class QQMusicNetworkProvider implements LyricsProvider {
     public name = "QQ Music";
-    private readonly API_BASE = "/api/qq"; // Proxied path
+    private readonly API_BASE = "/api/qq";
+    private readonly API_DECRYPT = "/api/qq-decrypt";
+
+    // QRC Parser instance
 
     private resolver = new SearchQueryResolver();
 
@@ -30,9 +34,6 @@ export class QQMusicNetworkProvider implements LyricsProvider {
             const keyword = `${title}${artistPart}`;
 
             // QQ Music Search API
-            // w: keyword
-            // n: limit
-            // format: json
             const searchUrl = `${this.API_BASE}/soso/fcgi-bin/client_search_cp?w=${encodeURIComponent(keyword)}&n=${limit}&format=json`;
 
             Logger.info(`[QQMusic] Searching: ${searchUrl}`);
@@ -58,42 +59,36 @@ export class QQMusicNetworkProvider implements LyricsProvider {
 
     private async processSearchResults(results: any[]): Promise<LyricResult[]> {
         const promises = results.map(async (track: any) => {
-            // Use base64 response for safety
-            const lyricUrl = `${this.API_BASE}/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=${track.songmid}&g_tk=5381&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0`;
+            // Use local decryption middleware with full metadata for QRC fetching
+            const artistName = track.singer ? track.singer[0].name : "Unknown";
+            const duration = track.interval || 0;
+            const params = new URLSearchParams({
+                songmid: track.songmid,
+                songid: track.songid,
+                title: track.songname,
+                artist: artistName,
+                album: track.albumname,
+                duration: String(duration)
+            });
+            const lyricUrl = `${this.API_DECRYPT}?${params.toString()}`;
 
             try {
                 const res = await fetch(lyricUrl);
-                let text = await res.text();
+                if (!res.ok) throw new Error(`Status ${res.status}`);
+                const json = await res.json();
 
-                // Handle JSONP
-                const jsonMatch = text.match(/\{.*\}/);
-                if (!jsonMatch) return null;
+                if (json.lyric || json.trans) {
+                    let lyricText = "";
+                    let translationText = undefined;
 
-                const json = JSON.parse(jsonMatch[0]);
-
-                if (json.lyric) {
-                    // Decode Base64 to binary string
-                    const binaryString = atob(json.lyric);
-                    // Convert binary string to Uint8Array
-                    const bytes = new Uint8Array(binaryString.length);
-                    for (let i = 0; i < binaryString.length; i++) {
-                        bytes[i] = binaryString.charCodeAt(i);
+                    // Prefer QRC (Already decrypted by middleware to XML string)
+                    if (json.lyric) {
+                        lyricText = json.lyric;
                     }
-                    // Decode UTF-8
-                    const decodedUtils = new TextDecoder('utf-8').decode(bytes);
 
-                    let decodedTrans = undefined;
                     if (json.trans) {
-                        try {
-                            const transBinaryString = atob(json.trans);
-                            const transBytes = new Uint8Array(transBinaryString.length);
-                            for (let i = 0; i < transBinaryString.length; i++) {
-                                transBytes[i] = transBinaryString.charCodeAt(i);
-                            }
-                            decodedTrans = new TextDecoder('utf-8').decode(transBytes);
-                        } catch (e) {
-                            Logger.warn(`[QQMusic] Failed to decode translation for ${track.songmid}`, e);
-                        }
+                        // Translation is usually LRC
+                        translationText = json.trans;
                     }
 
                     return {
@@ -101,9 +96,9 @@ export class QQMusicNetworkProvider implements LyricsProvider {
                         title: track.songname,
                         artist: track.singer ? track.singer.map((s: any) => s.name).join(", ") : "Unknown",
                         album: track.albumname,
-                        duration: track.interval, // seconds to ms? Input seems to be seconds.
-                        lyricText: decodedUtils, // Use correctly decoded text
-                        translationText: decodedTrans,
+                        duration: track.interval,
+                        lyricText: lyricText, // Raw decrypted QRC or LRC
+                        translationText: translationText,
                         source: this.name,
                         score: 0
                     } as LyricResult;
