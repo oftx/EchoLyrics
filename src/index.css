@@ -713,19 +713,24 @@ body {
 /* Syllable highlighting */
 .lyric-syllable {
   display: inline-block;
-  transition: color 50ms linear;
+  transition: opacity 150ms ease-out;
 }
 
-.lyric-syllable--passed {
+/* Only apply purple color to syllables in active lines */
+.lyric-line--active .lyric-syllable {
   color: var(--primary-light);
 }
 
+.lyric-syllable--passed {
+  opacity: 1; /* 100% - fully visible */
+}
+
 .lyric-syllable--active {
-  color: #ffeb3b;
+  opacity: 1; /* Transition to 100% as it's being sung */
 }
 
 .lyric-syllable--upcoming {
-  color: var(--text-primary);
+  opacity: 0.5; /* 50% - dimmed but readable */
 }
 
 /* --------------------------------------------------------------------------
