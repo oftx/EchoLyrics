@@ -85,6 +85,14 @@ export class QrcParser implements LyricsParser {
 
         lines.sort((a, b) => a.startTime - b.startTime);
 
+        // Validation: If we have lines but NONE are Layer 0 (QRC),
+        // then this is likely a standard LRC file that we mistakenly parsed as "All Translations".
+        // In this case, we should return empty/unsynced so the StandardLrcParser can handle it correctly as Layer 0.
+        const hasQrcLayer = lines.some(l => l.layer === 0);
+        if (lines.length > 0 && !hasQrcLayer) {
+            return { lines: [], metadata: {}, isSynced: false };
+        }
+
         return {
             lines,
             metadata,
