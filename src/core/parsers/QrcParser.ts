@@ -26,7 +26,8 @@ export class QrcParser implements LyricsParser {
                 let plainText = "";
 
                 // Regex for word tokens: Text(start,dur)
-                const wordRegex = /([^(]*)\((\d+),(\d+)\)/g;
+                // Use non-greedy match (.*?) to allow '(' inside the text itself (e.g., "(Vocals)")
+                const wordRegex = /(.*?)\((\d+),(\d+)\)/g;
                 let match;
 
                 while ((match = wordRegex.exec(content)) !== null) {
