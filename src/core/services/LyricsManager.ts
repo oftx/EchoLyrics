@@ -7,9 +7,9 @@ import { EnhancedLrcParser } from "../parsers/EnhancedLrcParser";
 import { LyricsData } from "../models/LyricsData";
 import { SongInformation } from "../interfaces/SongInformation";
 
-
-
 import { QrcParser } from "../parsers/QrcParser";
+import { LyricTypeDetector } from "../utils/LyricTypeDetector";
+import { LyricResult } from "../interfaces/LyricResult";
 
 export enum DisplayMode {
     Original = "Original",
@@ -31,13 +31,11 @@ export class LyricsManager {
     ];
 
     private currentLyrics: LyricsData | null = null;
-    private lastResults: import("../interfaces/LyricResult").LyricResult[] = [];
+    private lastResults: LyricResult[] = [];
     private currentSongKey: string = "";
     private listeners: ((data: LyricsData | null) => void)[] = [];
 
     private readonly STORAGE_KEY = "echo_lyrics_cache_v1";
-
-
 
     constructor() {
         // Init default parsers? yes.
@@ -103,10 +101,37 @@ export class LyricsManager {
         return finalData;
     }
 
-
-
     public getCurrentLyrics(): LyricsData | null {
         return this.currentLyrics;
+    }
+
+    /**
+     * Sorts candidates with custom logic:
+     * - Absolute score difference > 20: Higher score wins.
+     * - Score difference <= 20: Prefer Karaoke (QRC/Enhanced) over Standard.
+     */
+    private sortCandidates(candidates: LyricResult[]): LyricResult[] {
+        return candidates.sort((a, b) => {
+            const scoreDiff = b.score - a.score;
+
+            // If scores are significantly different, just trust the score
+            if (Math.abs(scoreDiff) > 20) {
+                return scoreDiff;
+            }
+
+            // Scores are close (within 20 points), check for Karaoke types
+            // We use the same detection logic as the UI
+            // Note: passing translationText is important for full detection
+            const typeA = LyricTypeDetector.getLyricTypes(a.lyricText, a.translationText);
+            const typeB = LyricTypeDetector.getLyricTypes(b.lyricText, b.translationText);
+
+            // Priority: Karaoke > Standard
+            if (typeA.hasKaraoke && !typeB.hasKaraoke) return -1; // A comes first
+            if (!typeA.hasKaraoke && typeB.hasKaraoke) return 1;  // B comes first
+
+            // Fallback to raw score for tie-breaking within same type
+            return scoreDiff;
+        });
     }
 
     /**
@@ -143,7 +168,7 @@ export class LyricsManager {
         // 1. Check for Embedded Lyrics (Priority 1)
         if (song.lyrics) {
             Logger.info(`[LyricsManager] Found embedded lyrics for ${song.title}`);
-            const embeddedResult: import("../interfaces/LyricResult").LyricResult = {
+            const embeddedResult: LyricResult = {
                 id: "embedded_" + Date.now(),
                 lyricText: song.lyrics,
                 source: "Embedded (ID3)",
@@ -173,7 +198,7 @@ export class LyricsManager {
         // 1.5 Check for Local File Content (Priority 0 - Highest)
         if (options?.localFileContent) {
             Logger.info(`[LyricsManager] Found local lyric file content`);
-            const localResult: import("../interfaces/LyricResult").LyricResult = {
+            const localResult: LyricResult = {
                 id: "local_" + Date.now(),
                 lyricText: options.localFileContent,
                 source: "Local File",
@@ -193,7 +218,7 @@ export class LyricsManager {
                     // No user override -> Use Local File
                     this.lastResults.unshift(localResult);
                     // We need to ensure we don't double add if we continue... 
-                    // Actually, let's just add it to 'lastResults' here and return selectLyric(0).
+                    // Actually, let's just add it to 'lastResults' and return selectLyric(0).
                     // But wait, what if we also have embedded lyrics? We want them in the list too.
                     // And online candidates?
 
@@ -223,7 +248,7 @@ export class LyricsManager {
 
                 if (song.lyrics && !hasEmbedded) {
                     Logger.info(`[LyricsManager] Prepending embedded lyrics to cached results`);
-                    const embeddedResult: import("../interfaces/LyricResult").LyricResult = {
+                    const embeddedResult: LyricResult = {
                         id: "embedded_" + song.persistenceId,
                         lyricText: song.lyrics,
                         source: "Embedded (ID3)",
@@ -238,7 +263,7 @@ export class LyricsManager {
                 // Check and add local file if provided
                 const hasLocal = restoredResults.some(r => r.source === "Local File");
                 if (options?.localFileContent && !hasLocal) {
-                    const localResult: import("../interfaces/LyricResult").LyricResult = {
+                    const localResult: LyricResult = {
                         id: "local_" + song.persistenceId,
                         lyricText: options.localFileContent,
                         source: "Local File",
@@ -293,8 +318,8 @@ export class LyricsManager {
 
             if (newOnes.length > 0) {
                 this.lastResults = [...this.lastResults, ...newOnes];
-                // Sort again
-                this.lastResults.sort((a, b) => b.score - a.score);
+                // Sort again using custom logic
+                this.lastResults = this.sortCandidates(this.lastResults);
 
                 const best = this.lastResults[0];
                 const currentScore = Number(this.currentLyrics?.metadata?.score || 0);
@@ -322,7 +347,7 @@ export class LyricsManager {
         }
 
         if (song.lyrics) {
-            const embeddedResult: import("../interfaces/LyricResult").LyricResult = {
+            const embeddedResult: LyricResult = {
                 id: "embedded_" + Date.now(),
                 lyricText: song.lyrics,
                 source: "Embedded (ID3)",
@@ -335,7 +360,7 @@ export class LyricsManager {
         }
 
         if (options?.localFileContent) {
-            const localResult: import("../interfaces/LyricResult").LyricResult = {
+            const localResult: LyricResult = {
                 id: "local_" + Date.now(),
                 lyricText: options.localFileContent,
                 source: "Local File",
@@ -347,7 +372,7 @@ export class LyricsManager {
             results.unshift(localResult);
         }
 
-        this.lastResults = results;
+        this.lastResults = this.sortCandidates(results);
 
         Logger.info(`[LyricsManager] Search returned ${results.length} candidates.`);
 
