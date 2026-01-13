@@ -841,11 +841,6 @@ export default function App() {
                                             <div className="candidate-source">{cand.source}</div>
                                         </div>
                                         <div className="candidate-badges">
-                                            {isCurrentlySelected && (
-                                                <span className="candidate-badge candidate-badge--selected" title="Currently playing">
-                                                    ✓
-                                                </span>
-                                            )}
                                             {types.hasTranslation && (
                                                 <span className="candidate-badge candidate-badge--translation" title="Has translation">
                                                     🌐
