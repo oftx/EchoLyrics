@@ -67,7 +67,20 @@ export class ScoringService {
         // 1. Title Match (40%)
         let titleSim = 0;
         if (candidate.title) {
-            titleSim = calculateSimilarity(targetTitle, candidate.title);
+            // Standard similarity
+            const rawSim = calculateSimilarity(targetTitle, candidate.title);
+
+            // Cleaned similarity (ignore brackets like "(Live)", "(Remix)", "(Translation)")
+            // Logic: If cleaned versions match well, it's likely the same song with extra metadata labels.
+            const cleanTarget = this.cleanString(targetTitle);
+            const cleanCand = this.cleanString(candidate.title);
+            const cleanSim = calculateSimilarity(cleanTarget, cleanCand);
+
+            // Allow the better of the two, but maybe apply a tiny penalty to cleanSim to prefer exact matches?
+            // Actually, for lyrics, often "Song (Translation)" IS the matched lyric we want. 
+            // So we trust max.
+            titleSim = Math.max(rawSim, cleanSim);
+
             let partScore = titleSim * ScoringService.WEIGHT_TITLE;
 
             // Boost for exact title match to prevent 0 score if other metadata fails
@@ -77,7 +90,7 @@ export class ScoringService {
             }
 
             score += partScore;
-            debugInfo.push(`Title: ${titleSim.toFixed(2)} * 40 = ${partScore.toFixed(1)}`);
+            debugInfo.push(`Title: ${titleSim.toFixed(2)} (Raw: ${rawSim.toFixed(2)}, Clean: ${cleanSim.toFixed(2)}) * 40 = ${partScore.toFixed(1)}`);
         }
 
         // 2. Artist Match (30%)
@@ -110,13 +123,15 @@ export class ScoringService {
     }
 
     private calculateArtistSimilarity(targetArtists: string[], candidateArtist: string): number {
-        // 1. Normalize separators: Replace [&, /] with comma
+        // 1. Normalize separators: Replace [&, /, brackets] with comma
         // Target is array, Candidate is string.
 
         // Helper to tokenize an artist string
         const tokenize = (str: string) => {
             return str.toLowerCase()
-                .replace(/[\&\/]/g, ',') // Unify separators
+                // Replace &, /, and brackets () [] {} with comma to treat content inside as separate tokens
+                // e.g. "Artist (Alias)" -> "Artist", "Alias"
+                .replace(/[\&\/\\(\)\[\]\{\}]/g, ',')
                 .split(/[, ]+/) // Split by comma or space
                 .map(s => s.trim())
                 .filter(s => s.length > 0);
@@ -163,5 +178,16 @@ export class ScoringService {
         if (diffMs <= 10000) return 0;   // Acceptable
         if (diffMs <= 20000) return -5;  // Discouraged
         return -10;                      // Bad
+    }
+
+    /**
+     * Removes text within brackets (parentheses, square, curly)
+     * e.g. "Song (Live)" -> "Song"
+     */
+    private cleanString(str: string): string {
+        if (!str) return "";
+        // Remove nested brackets? No, just one level is usually enough for titles.
+        // Remove (...) and [...] and {...}
+        return str.replace(/[\(\[\{].*?[\)\]\}]/g, "").trim();
     }
 }
