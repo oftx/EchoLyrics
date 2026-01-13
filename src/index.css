@@ -802,7 +802,7 @@ body {
    -------------------------------------------------------------------------- */
 .candidate-item {
   display: flex;
-  align-items: center;
+  align-items: stretch; /* Stretch to allow side info to fill height */
   justify-content: space-between;
   padding: var(--space-3);
   border-bottom: 1px solid var(--border-subtle);
@@ -826,7 +826,22 @@ body {
 
 .candidate-main {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   min-width: 0; /* Allow text truncation */
+  padding-right: var(--space-3);
+}
+
+.candidate-side {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-shrink: 0;
+  gap: var(--space-1);
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 
 .candidate-title {
@@ -846,17 +861,48 @@ body {
   white-space: nowrap;
 }
 
+.candidate-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: 2px;
+}
+
 .candidate-source {
   font-size: var(--text-xs);
   color: var(--text-disabled);
+}
+
+.candidate-score {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.candidate-score-label {
+  font-size: 10px; /* Smaller than standard xs */
+  color: var(--text-disabled);
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.candidate-score-value {
+  font-size: var(--text-xs); /* Keep standard size */
+  font-family: var(--font-mono);
+  color: var(--text-secondary); /* Make value slightly more visible than label per design pattern, or keep disabled? User said "same color as candidate-source" before. Let's start with disabled but maybe mono font makes it distinct */
+  color: var(--text-disabled); /* Keeping consistent with request */
+  font-weight: 500;
 }
 
 /* Badge container */
 .candidate-badges {
   display: flex;
   gap: var(--space-1);
-  margin-left: var(--space-3);
-  flex-shrink: 0;
+  justify-content: flex-end;
 }
 
 /* Individual badge styles */

@@ -838,24 +838,32 @@ export default function App() {
                                         <div className="candidate-main">
                                             <div className="candidate-title">{cand.title}</div>
                                             <div className="candidate-artist">{cand.artist}</div>
-                                            <div className="candidate-source">{cand.source}</div>
+                                            <div className="candidate-meta">
+                                                <span className="candidate-source">{cand.source}</span>
+                                            </div>
                                         </div>
-                                        <div className="candidate-badges">
-                                            {types.hasTranslation && (
-                                                <span className="candidate-badge candidate-badge--translation" title="Has translation">
-                                                    🌐
-                                                </span>
-                                            )}
-                                            {types.hasKaraoke && (
-                                                <span className="candidate-badge candidate-badge--karaoke" title="Word-by-word karaoke">
-                                                    🎤
-                                                </span>
-                                            )}
-                                            {types.isPlainText && (
-                                                <span className="candidate-badge candidate-badge--plaintext" title="Plain text (unsynced)">
-                                                    📄
-                                                </span>
-                                            )}
+                                        <div className="candidate-side">
+                                            <div className="candidate-badges">
+                                                {types.hasTranslation && (
+                                                    <span className="candidate-badge candidate-badge--translation" title="Has translation">
+                                                        🌐
+                                                    </span>
+                                                )}
+                                                {types.hasKaraoke && (
+                                                    <span className="candidate-badge candidate-badge--karaoke" title="Word-by-word karaoke">
+                                                        🎤
+                                                    </span>
+                                                )}
+                                                {types.isPlainText && (
+                                                    <span className="candidate-badge candidate-badge--plaintext" title="Plain text (unsynced)">
+                                                        📄
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="candidate-score" title="Match Score">
+                                                <span className="candidate-score-label">Score</span>
+                                                <span className="candidate-score-value">{cand.score.toFixed(0)}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 );
