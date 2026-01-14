@@ -9,6 +9,7 @@ import { LRCLibNetworkProvider } from "@/core/providers/LRCLibNetworkProvider";
 import { LyricsData } from '@/core/models/LyricsData';
 import { Logger, LogEntry } from '@/core/utils/Logger';
 import { ExportManagerModal } from './components/ExportManagerModal';
+import { FolderManagerModal } from './components/FolderManagerModal';
 
 import { MetadataService } from '@/core/services/MetadataService';
 import { SearchQueryResolver } from '@/core/utils/SearchQueryResolver';
@@ -92,7 +93,9 @@ export default function App() {
     const logContainerRef = useRef<HTMLDivElement>(null);
 
     // Folder persistence state
+    // Folder persistence state
     const [isLoadingFolder, setIsLoadingFolder] = useState(false);
+    const [showFolderManager, setShowFolderManager] = useState(false);
 
     // Subscribe to Logger
     useEffect(() => {
@@ -191,6 +194,14 @@ export default function App() {
         try {
             // If File System Access API is supported and no event (button click), use it
             if (!e && FolderPersistenceService.isSupported()) {
+                // Check if we have multiple saved folders
+                const handles = await FolderPersistenceService.getSavedFolderHandles();
+                if (handles.length > 1) {
+                    setShowFolderManager(true);
+                    setIsLoadingFolder(false);
+                    return;
+                }
+
                 setStatusMsg('Opening folder picker...');
                 const dirHandle = await FolderPersistenceService.selectFolder();
 
@@ -288,7 +299,7 @@ export default function App() {
         }
 
         try {
-            await FolderPersistenceService.clearSavedFolder();
+            await FolderPersistenceService.clearAllSavedFolders();
             setPlaylist([]);
             setAudioSrc(null);
             setCurrentIndex(-1);
@@ -1205,6 +1216,32 @@ export default function App() {
                 onClose={() => setShowExportModal(false)}
                 playlist={playlist}
                 manager={manager}
+            />
+
+            <FolderManagerModal
+                isOpen={showFolderManager}
+                onClose={() => setShowFolderManager(false)}
+                onSelectFolder={async (handle) => {
+                    setShowFolderManager(false);
+                    setIsLoadingFolder(true);
+                    try {
+                        setStatusMsg(`Loading folder: ${handle.name}...`);
+                        const items = await FolderPersistenceService.readFilesFromFolder(handle);
+                        if (items.length > 0) {
+                            setPlaylist(items);
+                            setStatusMsg(`Loaded ${items.length} songs from ${handle.name}`);
+                            playTrack(items[0], 0);
+                        } else {
+                            setStatusMsg('No audio files found in folder');
+                            setPlaylist([]);
+                        }
+                    } catch (err) {
+                        Logger.error('Failed to load selected folder', err);
+                        setStatusMsg('Failed to load selected folder');
+                    } finally {
+                        setIsLoadingFolder(false);
+                    }
+                }}
             />
         </div >
     )
