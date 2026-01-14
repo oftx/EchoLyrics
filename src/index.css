@@ -1559,3 +1559,27 @@ body {
 }
 
 
+
+/* --------------------------------------------------------------------------
+   16. Song Info Hover Interactions
+   -------------------------------------------------------------------------- */
+.song-info {
+  /* Ensure hover zone is robust */
+  padding: 10px; 
+  margin: -10px -10px var(--space-5) -10px; /* Counter-padding for top/side, but add space at bottom */
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-base);
+}
+
+
+
+.song-title-actions {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.song-info:hover .song-title-actions {
+  opacity: 1;
+  pointer-events: auto;
+}

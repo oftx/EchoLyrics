@@ -697,9 +697,21 @@ export default function App() {
 
 
 
-    const handleSearch = async () => {
-        let finalTitle = searchTitle;
-        let finalArtist = searchArtist;
+
+    const handleQuickSearch = () => {
+        const currentTitle = lyrics?.metadata?.title || playlist[currentIndex]?.title;
+        const currentArtist = lyrics?.metadata?.artist || playlist[currentIndex]?.artist;
+
+        if (currentTitle) {
+            setSearchTitle(currentTitle);
+            setSearchArtist(currentArtist || "");
+            handleSearch(currentTitle, currentArtist || "");
+        }
+    };
+
+    const handleSearch = async (overrideTitle?: string, overrideArtist?: string) => {
+        let finalTitle = overrideTitle || searchTitle;
+        let finalArtist = overrideArtist || searchArtist;
 
         // Optimized: If title or artist is empty, try to fill from MusicBrainz
         if ((!finalTitle || !finalArtist) && currentIndex >= 0 && currentIndex < playlist.length) {
@@ -854,7 +866,12 @@ export default function App() {
             {audioSrc && (
                 <div className="song-info">
                     {showAlbumArt && (
-                        <div className="album-art-container">
+                        <div
+                            className="album-art-container"
+                            onClick={() => setShowAlbumArt(false)}
+                            title="Click to hide album art"
+                            style={{ cursor: 'pointer' }}
+                        >
                             {albumArtUrl ? (
                                 <img src={albumArtUrl} alt="Album Art" className="album-art" />
                             ) : (
@@ -868,467 +885,516 @@ export default function App() {
                             )}
                         </div>
                     )}
-                    <h2
-                        className="song-title"
-                        onClick={() => setShowAlbumArt(!showAlbumArt)}
-                        title="Click to toggle album art"
-                        style={{ cursor: 'pointer' }}
+
+                    <div
+                        className="song-title-wrapper"
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
                     >
-                        {lyrics?.metadata?.title || searchTitle || "No Title"}
-                    </h2>
+                        <h2 className="song-title" style={{ cursor: 'default', margin: 0 }}>
+                            {lyrics?.metadata?.title || searchTitle || "No Title"}
+                        </h2>
+
+                            className="song-title-actions"
+                            style={{
+                                display: 'flex',
+                                gap: '4px',
+                                position: 'absolute',
+                                left: '100%',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                paddingLeft: '10px'
+                            }}
+                        >
+                            <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ padding: '0', height: '24px', width: '24px', minHeight: 'unset', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                onClick={handleQuickSearch}
+                                title="Search lyrics with current title and artist"
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                            </button>
+                            <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ padding: '0', height: '24px', width: '24px', minHeight: 'unset', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                onClick={() => setShowAlbumArt(!showAlbumArt)}
+                                title={showAlbumArt ? "Hide album art" : "Show album art"}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
                     <p className="song-artist">{lyrics?.metadata?.artist || searchArtist || "Unknown Artist"}</p>
                 </div>
-            )}
+    )
+}
 
-            {/* Main Lyrics View - MOVED UP */}
-            {/* Render conditional to prevent showing empty container if no song/lyrics? Or just standard view */}
-            {/* Keeping original logic: always render container, content depends on state */}
-            <div
-                className="lyrics-container"
+{/* Main Lyrics View - MOVED UP */ }
+{/* Render conditional to prevent showing empty container if no song/lyrics? Or just standard view */ }
+{/* Keeping original logic: always render container, content depends on state */ }
+<div
+    className="lyrics-container"
+>
+    {pipWindow ? (
+        <div className="lyrics-pip-message">
+            <p>Lyrics are displayed in the pop-out window.</p>
+            <button className="btn btn-secondary" onClick={togglePiP}>
+                Restore Lyrics to Main Window
+            </button>
+        </div>
+    ) : (
+        <>
+            <button
+                className="btn btn-ghost btn-sm lyrics-popout-btn"
+                onClick={togglePiP}
             >
-                {pipWindow ? (
-                    <div className="lyrics-pip-message">
-                        <p>Lyrics are displayed in the pop-out window.</p>
-                        <button className="btn btn-secondary" onClick={togglePiP}>
-                            Restore Lyrics to Main Window
-                        </button>
-                    </div>
-                ) : (
-                    <>
-                        <button
-                            className="btn btn-ghost btn-sm lyrics-popout-btn"
-                            onClick={togglePiP}
-                        >
-                            Pop Out Lyrics
-                        </button>
-                        <div className="lyrics-scroller no-scrollbar" ref={lyricsContainerRef}>
-                            {lyrics ? (
-                                <LyricsList
-                                    lyrics={lyrics}
-                                    activeLineIndex={activeLineIndex}
-                                    currentTime={currentTime}
-                                    autoScroll={true}
-                                    displayMode={displayMode}
-                                    centerRatio={0.5} // Explicitly set for main view too if needed, or default
-                                    onLineClick={handleLyricClick}
-                                />
-                            ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
-                        </div>
-                    </>
-                )}
+                Pop Out Lyrics
+            </button>
+            <div className="lyrics-scroller no-scrollbar" ref={lyricsContainerRef}>
+                {lyrics ? (
+                    <LyricsList
+                        lyrics={lyrics}
+                        activeLineIndex={activeLineIndex}
+                        currentTime={currentTime}
+                        autoScroll={true}
+                        displayMode={displayMode}
+                        centerRatio={0.5} // Explicitly set for main view too if needed, or default
+                        onLineClick={handleLyricClick}
+                    />
+                ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
             </div>
+        </>
+    )}
+</div>
 
-            {/* PiP Portal - Keep logical definition here or at bottom. Does not affect layout. */}
-            {pipWindow ? (
-                createPortal(
-                    <div className="no-scrollbar" ref={pipContainerRef} style={{
-                        height: '100vh',
-                        width: '100%',
-                        background: 'var(--bg-base)',
-                        color: 'var(--text-primary)',
-                        overflowY: 'auto',
-                        padding: 'var(--space-5)',
-                        boxSizing: 'border-box'
-                    }}>
-                        <div className="pip-header">
-                            <h2 className="pip-title">
-                                {lyrics?.metadata?.title || searchTitle || "Lyrics"}
-                            </h2>
-                            <div className="pip-artist">
-                                {lyrics?.metadata?.artist || searchArtist || ""}
+{/* PiP Portal - Keep logical definition here or at bottom. Does not affect layout. */ }
+{
+    pipWindow ? (
+        createPortal(
+            <div className="no-scrollbar" ref={pipContainerRef} style={{
+                height: '100vh',
+                width: '100%',
+                background: 'var(--bg-base)',
+                color: 'var(--text-primary)',
+                overflowY: 'auto',
+                padding: 'var(--space-5)',
+                boxSizing: 'border-box'
+            }}>
+                <div className="pip-header">
+                    <h2 className="pip-title">
+                        {lyrics?.metadata?.title || searchTitle || "Lyrics"}
+                    </h2>
+                    <div className="pip-artist">
+                        {lyrics?.metadata?.artist || searchArtist || ""}
+                    </div>
+                </div>
+                {lyrics ? (
+                    <LyricsList
+                        lyrics={lyrics}
+                        activeLineIndex={activeLineIndex}
+                        currentTime={currentTime}
+                        autoScroll={true}
+                        displayMode={displayMode}
+                        centerRatio={0.5}
+                        onLineClick={handleLyricClick}
+                    />
+                ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
+            </div>,
+            pipWindow.document.body
+        )
+    ) : null
+}
+
+{/* Search Controls - MOVED DOWN */ }
+<div className="search-controls" style={{ marginTop: 'var(--space-5)' }}>
+    <div className="input-wrapper">
+        <input
+            type="text"
+            className="input input-with-clear"
+            placeholder="Title"
+            value={searchTitle}
+            onChange={e => setSearchTitle(e.target.value)}
+        />
+        {searchTitle && (
+            <button className="input-clear-btn" onClick={() => setSearchTitle('')} title="Clear">
+                ✕
+            </button>
+        )}
+    </div>
+    <div className="input-wrapper">
+        <input
+            type="text"
+            className="input input-with-clear"
+            placeholder="Artist"
+            value={searchArtist}
+            onChange={e => setSearchArtist(e.target.value)}
+        />
+        {searchArtist && (
+            <button className="input-clear-btn" onClick={() => setSearchArtist('')} title="Clear">
+                ✕
+            </button>
+        )}
+    </div>
+    <div className="number-stepper">
+        <button
+            type="button"
+            className="number-stepper-btn"
+            onClick={() => setSearchLimit(Math.max(1, searchLimit - 1))}
+        >
+            −
+        </button>
+        <input
+            type="text"
+            className="number-stepper-input"
+            value={searchLimit}
+            onChange={e => {
+                const val = parseInt(e.target.value);
+                if (!isNaN(val) && val > 0) setSearchLimit(val);
+            }}
+        />
+        <button
+            type="button"
+            className="number-stepper-btn number-stepper-btn--plus"
+            onClick={() => setSearchLimit(searchLimit + 1)}
+        >
+            +
+        </button>
+    </div>
+    <button className="btn btn-primary" onClick={() => handleSearch()}>Search Lyrics</button>
+    <button className="btn btn-ghost" onClick={() => setShowExportModal(true)}>Export Lyrics</button>
+</div>
+
+{/* Status Bar - MOVED DOWN */ }
+<div className="status-bar">
+    <span>{statusMsg}</span>
+    {/* Offset Controls */}
+    {lyrics && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 'var(--space-3)', borderRight: '1px solid var(--border-subtle)', paddingRight: 'var(--space-3)' }}>
+            <span style={{ fontSize: 'var(--text-xs)' }}>Offset:</span>
+            <button
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '0 6px', height: '24px', minHeight: 'unset' }}
+                onClick={() => setLyricOffset(o => o - 100)}
+                title="Advance lyrics (Lyrics appear ealier)"
+            >
+                −
+            </button>
+            <span style={{ fontSize: 'var(--text-xs)', minWidth: '50px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', cursor: 'pointer' }} onClick={() => setLyricOffset(0)} title="Click to reset">
+                {lyricOffset > 0 ? '+' : ''}{lyricOffset}ms
+            </span>
+            <button
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '0 6px', height: '24px', minHeight: 'unset' }}
+                onClick={() => setLyricOffset(o => o + 100)}
+                title="Delay lyrics (Lyrics appear later)"
+            >
+                +
+            </button>
+        </div>
+    )}
+    {lyrics && lyrics.metadata && lyrics.metadata['source'] && (
+        <>
+            <span className="status-badge">
+                Source: {lyrics.metadata['source']}
+            </span>
+            <button className="btn btn-ghost btn-sm" onClick={handleShowCandidates}>
+                Switch Lyrics
+            </button>
+        </>
+    )}
+    {lyrics && (
+        <div className="display-mode-controls" style={{ marginLeft: 'auto' }}>
+            <select
+                className="select select-sm select-display-mode"
+                value={displayMode}
+                onChange={(e) => handleDisplayModeChange(e.target.value as DisplayMode)}
+            >
+                <option value={DisplayMode.Original}>Original</option>
+                <option value={DisplayMode.Translation}>Translation</option>
+                <option value={DisplayMode.Both}>Both</option>
+            </select>
+        </div>
+    )}
+</div>
+
+{/* Candidates Modal - Keep near status bar contextually */ }
+{
+    showCandidates && (
+        <div className="modal-overlay" onClick={() => setShowCandidates(false)}>
+            <div
+                className="modal-content modal-content--candidates"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="modal-header">
+                    <h3 className="modal-title">Select Lyrics</h3>
+                </div>
+                <div className="modal-body">
+                    {candidates.map((cand, idx) => {
+                        // Detect lyric types
+                        const types = LyricTypeDetector.getLyricTypes(cand.lyricText, cand.translationText);
+
+                        // Check if this is the currently selected lyric
+                        const isCurrentlySelected = lyrics?.metadata?.['source'] === cand.source &&
+                            lyrics?.metadata?.['title'] === cand.title &&
+                            lyrics?.metadata?.['artist'] === cand.artist;
+
+                        return (
+                            <div
+                                key={idx}
+                                onClick={() => handleSelectCandidate(idx)}
+                                className={`candidate-item ${isCurrentlySelected ? 'candidate-item--selected' : ''}`}
+                            >
+                                <div className="candidate-main">
+                                    <div className="candidate-title">{cand.title}</div>
+                                    <div className="candidate-artist">{cand.artist}</div>
+                                    <div className="candidate-meta">
+                                        <span className="candidate-source">{cand.source}</span>
+                                    </div>
+                                </div>
+                                <div className="candidate-side">
+                                    <div className="candidate-badges">
+                                        {types.hasTranslation && (
+                                            <span className="candidate-badge candidate-badge--translation" title="Has translation">
+                                                🌐
+                                            </span>
+                                        )}
+                                        {types.hasKaraoke && (
+                                            <span className="candidate-badge candidate-badge--karaoke" title="Word-by-word karaoke">
+                                                🎤
+                                            </span>
+                                        )}
+                                        {types.isPlainText && (
+                                            <span className="candidate-badge candidate-badge--plaintext" title="Plain text (unsynced)">
+                                                📄
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="candidate-score" title="Match Score">
+                                        <span className="candidate-score-label">Score</span>
+                                        <span className="candidate-score-value">{cand.score.toFixed(0)}</span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        {lyrics ? (
-                            <LyricsList
-                                lyrics={lyrics}
-                                activeLineIndex={activeLineIndex}
-                                currentTime={currentTime}
-                                autoScroll={true}
-                                displayMode={displayMode}
-                                centerRatio={0.5}
-                                onLineClick={handleLyricClick}
-                            />
-                        ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
-                    </div>,
-                    pipWindow.document.body
-                )
-            ) : null}
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    )
+}
 
-            {/* Search Controls - MOVED DOWN */}
-            <div className="search-controls" style={{ marginTop: 'var(--space-5)' }}>
-                <div className="input-wrapper">
-                    <input
-                        type="text"
-                        className="input input-with-clear"
-                        placeholder="Title"
-                        value={searchTitle}
-                        onChange={e => setSearchTitle(e.target.value)}
-                    />
-                    {searchTitle && (
-                        <button className="input-clear-btn" onClick={() => setSearchTitle('')} title="Clear">
-                            ✕
-                        </button>
-                    )}
-                </div>
-                <div className="input-wrapper">
-                    <input
-                        type="text"
-                        className="input input-with-clear"
-                        placeholder="Artist"
-                        value={searchArtist}
-                        onChange={e => setSearchArtist(e.target.value)}
-                    />
-                    {searchArtist && (
-                        <button className="input-clear-btn" onClick={() => setSearchArtist('')} title="Clear">
-                            ✕
-                        </button>
-                    )}
-                </div>
-                <div className="number-stepper">
+{/* Audio Player - MOVED DOWN */ }
+{
+    audioSrc && (
+        <div className="audio-player-wrapper">
+            <audio
+                ref={audioRef}
+                src={audioSrc}
+                controls={useNativePlayer}
+                onTimeUpdate={handleTimeUpdate}
+                onEnded={handleAudioEnded}
+                onError={handleAudioError}
+                onLoadedMetadata={() => setAudioDuration(audioRef.current?.duration || 0)}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                style={{ display: useNativePlayer ? 'block' : 'none', width: '100%' }}
+                onVolumeChange={(e) => setVolume(e.currentTarget.volume)}
+            />
+            {!useNativePlayer && (
+                <div className="custom-player">
                     <button
-                        type="button"
-                        className="number-stepper-btn"
-                        onClick={() => setSearchLimit(Math.max(1, searchLimit - 1))}
+                        className="custom-player-btn custom-player-btn--play"
+                        onClick={() => {
+                            if (audioRef.current?.paused) {
+                                audioRef.current.play().catch(e => {
+                                    if (e.name !== 'AbortError') console.error(e);
+                                });
+                            } else {
+                                audioRef.current?.pause();
+                            }
+                        }}
                     >
-                        −
+                        {isPlaying ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="6" y="4" width="4" height="16" rx="1" />
+                                <rect x="14" y="4" width="4" height="16" rx="1" />
+                            </svg>
+                        ) : (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36a1 1 0 00-1.5.86z" />
+                            </svg>
+                        )}
                     </button>
+                    <span className="custom-player-time">
+                        {formatTime((currentTime + lyricOffset) / 1000)} / {formatTime(audioDuration)}
+                    </span>
                     <input
-                        type="text"
-                        className="number-stepper-input"
-                        value={searchLimit}
-                        onChange={e => {
-                            const val = parseInt(e.target.value);
-                            if (!isNaN(val) && val > 0) setSearchLimit(val);
+                        type="range"
+                        className="custom-player-progress"
+                        min={0}
+                        max={audioDuration || 100}
+                        value={(currentTime + lyricOffset) / 1000}
+                        onChange={(e) => {
+                            if (audioRef.current) {
+                                const t = parseFloat(e.target.value);
+                                audioRef.current.currentTime = t;
+
+                                const synced = (t * 1000) - lyricOffset;
+                                setCurrentTime(synced);
+                                if (lyrics) {
+                                    const idx = manager.getSynchronizer().findLineIndex(lyrics, synced);
+                                    setActiveLineIndex(idx);
+                                }
+                            }
                         }}
                     />
                     <button
-                        type="button"
-                        className="number-stepper-btn number-stepper-btn--plus"
-                        onClick={() => setSearchLimit(searchLimit + 1)}
+                        className="custom-player-btn"
+                        onClick={() => {
+                            if (audioRef.current) {
+                                const newMuted = !audioRef.current.muted;
+                                audioRef.current.muted = newMuted;
+                                // Force volume update if unmuted?
+                                if (!newMuted && audioRef.current.volume === 0) {
+                                    audioRef.current.volume = 1;
+                                    setVolume(1);
+                                }
+                            }
+                        }}
                     >
-                        +
+                        🔊
                     </button>
                 </div>
-                <button className="btn btn-primary" onClick={handleSearch}>Search Lyrics</button>
-                <button className="btn btn-ghost" onClick={() => setShowExportModal(true)}>Export Lyrics</button>
-            </div>
-
-            {/* Status Bar - MOVED DOWN */}
-            <div className="status-bar">
-                <span>{statusMsg}</span>
-                {/* Offset Controls */}
-                {lyrics && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 'var(--space-3)', borderRight: '1px solid var(--border-subtle)', paddingRight: 'var(--space-3)' }}>
-                        <span style={{ fontSize: 'var(--text-xs)' }}>Offset:</span>
-                        <button
-                            className="btn btn-ghost btn-sm"
-                            style={{ padding: '0 6px', height: '24px', minHeight: 'unset' }}
-                            onClick={() => setLyricOffset(o => o - 100)}
-                            title="Advance lyrics (Lyrics appear ealier)"
-                        >
-                            −
-                        </button>
-                        <span style={{ fontSize: 'var(--text-xs)', minWidth: '50px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', cursor: 'pointer' }} onClick={() => setLyricOffset(0)} title="Click to reset">
-                            {lyricOffset > 0 ? '+' : ''}{lyricOffset}ms
-                        </span>
-                        <button
-                            className="btn btn-ghost btn-sm"
-                            style={{ padding: '0 6px', height: '24px', minHeight: 'unset' }}
-                            onClick={() => setLyricOffset(o => o + 100)}
-                            title="Delay lyrics (Lyrics appear later)"
-                        >
-                            +
-                        </button>
-                    </div>
-                )}
-                {lyrics && lyrics.metadata && lyrics.metadata['source'] && (
-                    <>
-                        <span className="status-badge">
-                            Source: {lyrics.metadata['source']}
-                        </span>
-                        <button className="btn btn-ghost btn-sm" onClick={handleShowCandidates}>
-                            Switch Lyrics
-                        </button>
-                    </>
-                )}
-                {lyrics && (
-                    <div className="display-mode-controls" style={{ marginLeft: 'auto' }}>
-                        <select
-                            className="select select-sm select-display-mode"
-                            value={displayMode}
-                            onChange={(e) => handleDisplayModeChange(e.target.value as DisplayMode)}
-                        >
-                            <option value={DisplayMode.Original}>Original</option>
-                            <option value={DisplayMode.Translation}>Translation</option>
-                            <option value={DisplayMode.Both}>Both</option>
-                        </select>
-                    </div>
-                )}
-            </div>
-
-            {/* Candidates Modal - Keep near status bar contextually */}
-            {showCandidates && (
-                <div className="modal-overlay" onClick={() => setShowCandidates(false)}>
-                    <div
-                        className="modal-content modal-content--candidates"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="modal-header">
-                            <h3 className="modal-title">Select Lyrics</h3>
-                        </div>
-                        <div className="modal-body">
-                            {candidates.map((cand, idx) => {
-                                // Detect lyric types
-                                const types = LyricTypeDetector.getLyricTypes(cand.lyricText, cand.translationText);
-
-                                // Check if this is the currently selected lyric
-                                const isCurrentlySelected = lyrics?.metadata?.['source'] === cand.source &&
-                                    lyrics?.metadata?.['title'] === cand.title &&
-                                    lyrics?.metadata?.['artist'] === cand.artist;
-
-                                return (
-                                    <div
-                                        key={idx}
-                                        onClick={() => handleSelectCandidate(idx)}
-                                        className={`candidate-item ${isCurrentlySelected ? 'candidate-item--selected' : ''}`}
-                                    >
-                                        <div className="candidate-main">
-                                            <div className="candidate-title">{cand.title}</div>
-                                            <div className="candidate-artist">{cand.artist}</div>
-                                            <div className="candidate-meta">
-                                                <span className="candidate-source">{cand.source}</span>
-                                            </div>
-                                        </div>
-                                        <div className="candidate-side">
-                                            <div className="candidate-badges">
-                                                {types.hasTranslation && (
-                                                    <span className="candidate-badge candidate-badge--translation" title="Has translation">
-                                                        🌐
-                                                    </span>
-                                                )}
-                                                {types.hasKaraoke && (
-                                                    <span className="candidate-badge candidate-badge--karaoke" title="Word-by-word karaoke">
-                                                        🎤
-                                                    </span>
-                                                )}
-                                                {types.isPlainText && (
-                                                    <span className="candidate-badge candidate-badge--plaintext" title="Plain text (unsynced)">
-                                                        📄
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="candidate-score" title="Match Score">
-                                                <span className="candidate-score-label">Score</span>
-                                                <span className="candidate-score-value">{cand.score.toFixed(0)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
             )}
+            <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setUseNativePlayer(!useNativePlayer)}
+                style={{ marginLeft: 'var(--space-2)', fontSize: 'var(--text-xs)' }}
+            >
+                {useNativePlayer ? 'Custom Player' : 'Native Player'}
+            </button>
+        </div>
+    )
+}
 
-            {/* Audio Player - MOVED DOWN */}
-            {audioSrc && (
-                <div className="audio-player-wrapper">
-                    <audio
-                        ref={audioRef}
-                        src={audioSrc}
-                        controls={useNativePlayer}
-                        onTimeUpdate={handleTimeUpdate}
-                        onEnded={handleAudioEnded}
-                        onError={handleAudioError}
-                        onLoadedMetadata={() => setAudioDuration(audioRef.current?.duration || 0)}
-                        onPlay={() => setIsPlaying(true)}
-                        onPause={() => setIsPlaying(false)}
-                        style={{ display: useNativePlayer ? 'block' : 'none', width: '100%' }}
-                        onVolumeChange={(e) => setVolume(e.currentTarget.volume)}
-                    />
-                    {!useNativePlayer && (
-                        <div className="custom-player">
-                            <button
-                                className="custom-player-btn custom-player-btn--play"
-                                onClick={() => {
-                                    if (audioRef.current?.paused) {
-                                        audioRef.current.play().catch(e => {
-                                            if (e.name !== 'AbortError') console.error(e);
-                                        });
-                                    } else {
-                                        audioRef.current?.pause();
-                                    }
-                                }}
-                            >
-                                {isPlaying ? (
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                        <rect x="6" y="4" width="4" height="16" rx="1" />
-                                        <rect x="14" y="4" width="4" height="16" rx="1" />
-                                    </svg>
-                                ) : (
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36a1 1 0 00-1.5.86z" />
-                                    </svg>
-                                )}
-                            </button>
-                            <span className="custom-player-time">
-                                {formatTime((currentTime + lyricOffset) / 1000)} / {formatTime(audioDuration)}
-                            </span>
+{/* Empty State */ }
+{
+    !audioSrc && (
+        <div className="card text-center" style={{ padding: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>
+            <p className="text-muted">Select a music folder to start playing.</p>
+        </div>
+    )
+}
+
+{/* Playlist UI with header - MOVED TO BOTTOM */ }
+{
+    playlist.length > 0 && (
+        <div className="playlist-section" style={{ marginTop: 'var(--space-4)' }}>
+            <div className="playlist-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="playlist-count">{playlist.length} songs</span>
+
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    {/* Change Folder Button */}
+                    {FolderPersistenceService.isSupported() ? (
+                        <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => handleFolderSelect()}
+                            disabled={isLoadingFolder}
+                            title="Change Folder"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                            </svg>
+                        </button>
+                    ) : (
+                        <label className="btn btn-ghost btn-sm" title="Change Folder">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                            </svg>
                             <input
-                                type="range"
-                                className="custom-player-progress"
-                                min={0}
-                                max={audioDuration || 100}
-                                value={(currentTime + lyricOffset) / 1000}
-                                onChange={(e) => {
-                                    if (audioRef.current) {
-                                        const t = parseFloat(e.target.value);
-                                        audioRef.current.currentTime = t;
-
-                                        const synced = (t * 1000) - lyricOffset;
-                                        setCurrentTime(synced);
-                                        if (lyrics) {
-                                            const idx = manager.getSynchronizer().findLineIndex(lyrics, synced);
-                                            setActiveLineIndex(idx);
-                                        }
-                                    }
-                                }}
+                                type="file"
+                                // @ts-expect-error webkitdirectory is not standard
+                                webkitdirectory=""
+                                directory=""
+                                onChange={handleFolderSelect}
+                                multiple
+                                disabled={isLoadingFolder}
+                                style={{ display: 'none' }}
                             />
-                            <button
-                                className="custom-player-btn"
-                                onClick={() => {
-                                    if (audioRef.current) {
-                                        const newMuted = !audioRef.current.muted;
-                                        audioRef.current.muted = newMuted;
-                                        // Force volume update if unmuted?
-                                        if (!newMuted && audioRef.current.volume === 0) {
-                                            audioRef.current.volume = 1;
-                                            setVolume(1);
-                                        }
-                                    }
-                                }}
-                            >
-                                🔊
-                            </button>
-                        </div>
+                        </label>
                     )}
-                    <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setUseNativePlayer(!useNativePlayer)}
-                        style={{ marginLeft: 'var(--space-2)', fontSize: 'var(--text-xs)' }}
+
+                    {/* Clear Folder Button (API Only) */}
+                    {FolderPersistenceService.isSupported() && (
+                        <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={handleClearFolder}
+                            disabled={isLoadingFolder}
+                            title="Clear saved folder"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M3 6h18" />
+                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                            </svg>
+                        </button>
+                    )}
+                </div>
+            </div>
+            <div className="playlist">
+                {playlist.map((item, idx) => (
+                    <div
+                        key={idx}
+                        onClick={() => playTrack(item, idx)}
+                        className={`playlist-item ${idx === currentIndex ? 'playlist-item--active' : ''}`}
                     >
-                        {useNativePlayer ? 'Custom Player' : 'Native Player'}
-                    </button>
-                </div>
-            )}
-
-            {/* Empty State */}
-            {!audioSrc && (
-                <div className="card text-center" style={{ padding: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>
-                    <p className="text-muted">Select a music folder to start playing.</p>
-                </div>
-            )}
-
-            {/* Playlist UI with header - MOVED TO BOTTOM */}
-            {playlist.length > 0 && (
-                <div className="playlist-section" style={{ marginTop: 'var(--space-4)' }}>
-                    <div className="playlist-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="playlist-count">{playlist.length} songs</span>
-
-                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                            {/* Change Folder Button */}
-                            {FolderPersistenceService.isSupported() ? (
-                                <button
-                                    className="btn btn-ghost btn-sm"
-                                    onClick={() => handleFolderSelect()}
-                                    disabled={isLoadingFolder}
-                                    title="Change Folder"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                                    </svg>
-                                </button>
-                            ) : (
-                                <label className="btn btn-ghost btn-sm" title="Change Folder">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                                    </svg>
-                                    <input
-                                        type="file"
-                                        // @ts-expect-error webkitdirectory is not standard
-                                        webkitdirectory=""
-                                        directory=""
-                                        onChange={handleFolderSelect}
-                                        multiple
-                                        disabled={isLoadingFolder}
-                                        style={{ display: 'none' }}
-                                    />
-                                </label>
-                            )}
-
-                            {/* Clear Folder Button (API Only) */}
-                            {FolderPersistenceService.isSupported() && (
-                                <button
-                                    className="btn btn-ghost btn-sm"
-                                    onClick={handleClearFolder}
-                                    disabled={isLoadingFolder}
-                                    title="Clear saved folder"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M3 6h18" />
-                                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                                    </svg>
-                                </button>
-                            )}
-                        </div>
+                        <span className="playlist-item-index">{idx + 1}.</span>
+                        <span className="playlist-item-name">{item.name}</span>
+                        {item.lyricFile && <span className="playlist-item-badge">LRC</span>}
                     </div>
-                    <div className="playlist">
-                        {playlist.map((item, idx) => (
-                            <div
-                                key={idx}
-                                onClick={() => playTrack(item, idx)}
-                                className={`playlist-item ${idx === currentIndex ? 'playlist-item--active' : ''}`}
-                            >
-                                <span className="playlist-item-index">{idx + 1}.</span>
-                                <span className="playlist-item-name">{item.name}</span>
-                                {item.lyricFile && <span className="playlist-item-badge">LRC</span>}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+                ))}
+            </div>
+        </div>
+    )
+}
 
-            {/* Logs Viewer - MOVED TO BOTTOM */}
-            <div className={`log-panel ${showLogs ? 'log-panel--open' : 'log-panel--closed'}`}>
-                <div
-                    className="log-panel-header"
-                    onClick={() => setShowLogs(!showLogs)}
-                    style={{ cursor: 'pointer', userSelect: 'none' }}
-                >
-                    <span>{showLogs ? '▼' : '▶'} Application Logs</span>
-                    <span className="text-muted" style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)' }}>
-                        {logs.length} entries
+{/* Logs Viewer - MOVED TO BOTTOM */ }
+<div className={`log-panel ${showLogs ? 'log-panel--open' : 'log-panel--closed'}`}>
+    <div
+        className="log-panel-header"
+        onClick={() => setShowLogs(!showLogs)}
+        style={{ cursor: 'pointer', userSelect: 'none' }}
+    >
+        <span>{showLogs ? '▼' : '▶'} Application Logs</span>
+        <span className="text-muted" style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)' }}>
+            {logs.length} entries
+        </span>
+    </div>
+    {showLogs && (
+        <div ref={logContainerRef} className="log-panel-content">
+            {logs.map((log, i) => (
+                <div key={i} className="log-entry">
+                    <span className="log-time">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                    <span className={`log-level log-level--${log.level}`}>[{log.level.toUpperCase()}]</span>
+                    <span className="log-message">
+                        {log.message}
+                        {log.data && <span className="log-data"> {JSON.stringify(log.data)}</span>}
                     </span>
                 </div>
-                {showLogs && (
-                    <div ref={logContainerRef} className="log-panel-content">
-                        {logs.map((log, i) => (
-                            <div key={i} className="log-entry">
-                                <span className="log-time">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                                <span className={`log-level log-level--${log.level}`}>[{log.level.toUpperCase()}]</span>
-                                <span className="log-message">
-                                    {log.message}
-                                    {log.data && <span className="log-data"> {JSON.stringify(log.data)}</span>}
-                                </span>
-                            </div>
-                        ))}
-                        {logs.length === 0 && <div className="log-empty">No logs yet...</div>}
-                    </div>
-                )}
-            </div>
+            ))}
+            {logs.length === 0 && <div className="log-empty">No logs yet...</div>}
+        </div>
+    )}
+</div>
 
-            {/* Export Modal */}
+{/* Export Modal */ }
             <ExportManagerModal
                 isOpen={showExportModal}
                 onClose={() => setShowExportModal(false)}
