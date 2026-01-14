@@ -52,44 +52,76 @@ export class SearchQueryResolver {
             }
         }
 
+        // Fallback: Search by Name if ISRC missing or yielded no results
+        if ((!song.isrc || uniqueQueries.length === 0) && song.title && song.artists && song.artists.length > 0) {
+            const artist = song.artists[0];
+            const cacheKey = `NAME:${song.title}|${artist}`;
+            let metadataPromise: Promise<{ title: string; artist: string }[]>;
+
+            if (SearchQueryResolver.isrcCache.has(cacheKey)) {
+                metadataPromise = SearchQueryResolver.isrcCache.get(cacheKey)!;
+            } else {
+                Logger.info(`[SearchResolver] No ISRC or no ISRC results. Searching MusicBrainz by name: ${song.title} - ${artist}`);
+                metadataPromise = this.fetchMusicBrainzMetadataByName(song.title, artist);
+                SearchQueryResolver.isrcCache.set(cacheKey, metadataPromise);
+            }
+
+            try {
+                const nameMetadata = await metadataPromise;
+                if (nameMetadata.length > 0) {
+                    const candidates = [...nameMetadata];
+                    uniqueQueries = this.sortMetadataByLanguage(candidates);
+                    Logger.info(`[SearchResolver] Resolved ${uniqueQueries.length} queries from MusicBrainz by name.`);
+                }
+            } catch (e) {
+                Logger.error(`[SearchResolver] Error resolving by name ${song.title}`, e);
+            }
+        }
+
         // Logic to detect Manual Override / Mismatch
-        // If we have MB results, we check if the current input (song.title) is already in the results.
         let isManualOverride = false;
+        const isAutoSearch = song.sourceId === 'local_auto' || (song.sourceId && song.sourceId.includes('auto'));
 
         if (uniqueQueries.length > 0) {
-            // Check similarity against the best MB match (or all candidates)
             const inputTitle = song.title;
-            // We use the highest similarity found among candidates
             let maxSim = 0;
             for (const candidate of uniqueQueries) {
                 const sim = calculateSimilarity(inputTitle, candidate.title);
                 if (sim > maxSim) maxSim = sim;
             }
 
-            // If the best match is less than 0.8 similar, we assume the user input is "different enough"
-            // to warrant being treated as an explicit search (Manual Override)
-            // CRITICAL FIX: Only if inputTitle is NOT empty. If it's empty, we must trust the MB result.
+            // If Similarity < 0.8, we usually assume Manual Override.
+            // But if it's an Auto Search, we trust the MB result (which is likely correct) over the local file tag.
             if (inputTitle && maxSim < 0.8) {
-                Logger.info(`[SearchResolver] Detected Manual Override/Mismatch (Max Similarity: ${maxSim.toFixed(2)}). Prioritizing input over MB results.`);
-                isManualOverride = true;
+                if (!isAutoSearch) {
+                    Logger.info(`[SearchResolver] Detected Manual Override/Mismatch (Max Similarity: ${maxSim.toFixed(2)}). Prioritizing input over MB results.`);
+                    isManualOverride = true;
+                } else {
+                    Logger.info(`[SearchResolver] Low similarity (${maxSim.toFixed(2)}) detected in Auto Search. Trusting MB results over local metadata.`);
+                }
             }
         } else {
-            // No MB results, so definitely use input
+            // No MB results, always use input
             isManualOverride = true;
         }
 
-        // Strategy 2: Fallback or Manual Override
-        // If override, we prepend the input to the list.
-        // If list is empty (no MB results), we naturally push input.
+        // Apply Manual Override or Fallback
         if (isManualOverride || uniqueQueries.length === 0) {
             const artistPart = (song.artists && song.artists[0]) ? song.artists[0] : "";
-            // Add to the front!
             const manualQuery = { title: song.title, artist: artistPart };
 
-            // Avoid duplicates if we forcibly prepended but it WAS in the list (e.g. similarity was 0.79 but identical string? unlikely, but check exact title)
             const exists = uniqueQueries.some(q => q.title === manualQuery.title && q.artist === manualQuery.artist);
             if (!exists) {
+                // If override, PREPEND.
                 uniqueQueries.unshift(manualQuery);
+            }
+        } else if (isAutoSearch && uniqueQueries.length > 0) {
+            // In Auto Search, if we found MB results, we still append the local file metadata as a fallback at the end.
+            const artistPart = (song.artists && song.artists[0]) ? song.artists[0] : "";
+            const manualQuery = { title: song.title, artist: artistPart };
+            const exists = uniqueQueries.some(q => q.title === manualQuery.title && q.artist === manualQuery.artist);
+            if (!exists) {
+                uniqueQueries.push(manualQuery);
             }
         }
 
@@ -111,27 +143,47 @@ export class SearchQueryResolver {
             }
 
             const data = await response.json();
-            if (!data.recordings) return [];
-
-            const candidates: { title: string; artist: string }[] = [];
-            const seen = new Set<string>();
-
-            for (const recording of data.recordings) {
-                const title = recording.title;
-                const artist = recording['artist-credit']?.[0]?.name || "";
-
-                const key = `${title}|${artist}`;
-                if (title && !seen.has(key)) {
-                    candidates.push({ title, artist });
-                    seen.add(key);
-                }
-            }
-            return candidates;
+            return this.parseMusicBrainzResponse(data);
 
         } catch (e) {
             Logger.error("[SearchResolver] MusicBrainz connection error:", e);
             return [];
         }
+    }
+
+    private async fetchMusicBrainzMetadataByName(title: string, artist: string): Promise<{ title: string; artist: string }[]> {
+        try {
+            const query = `recording:${title} AND artist:${artist}`;
+            const url = `${this.MUSICBRAINZ_API_BASE}/recording?query=${encodeURIComponent(query)}&fmt=json&limit=5`;
+            Logger.info(`[SearchResolver] Querying MusicBrainz by name: ${url}`);
+
+            const response = await fetch(url, { headers: { 'User-Agent': 'LyricsApp/1.0 ( contact@example.com )' } });
+            if (!response.ok) {
+                Logger.warn(`[SearchResolver] MusicBrainz name lookup failed: ${response.status}`);
+                return [];
+            }
+            const data = await response.json();
+            return this.parseMusicBrainzResponse(data);
+        } catch (e) {
+            Logger.error("[SearchResolver] MusicBrainz name lookup error:", e);
+            return [];
+        }
+    }
+
+    private parseMusicBrainzResponse(data: any): { title: string; artist: string }[] {
+        if (!data.recordings) return [];
+        const candidates: { title: string; artist: string }[] = [];
+        const seen = new Set<string>();
+        for (const recording of data.recordings) {
+            const title = recording.title;
+            const artist = recording['artist-credit']?.[0]?.name || "";
+            const key = `${title}|${artist}`;
+            if (title && !seen.has(key)) {
+                candidates.push({ title, artist });
+                seen.add(key);
+            }
+        }
+        return candidates;
     }
 
     private sortMetadataByLanguage(candidates: { title: string; artist: string }[]): { title: string; artist: string }[] {
