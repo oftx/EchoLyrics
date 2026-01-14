@@ -726,75 +726,7 @@ export default function App() {
                 </div>
             )}
 
-            {/* Playlist UI with header */}
-            {playlist.length > 0 && (
-                <div className="playlist-section">
-                    <div className="playlist-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="playlist-count">{playlist.length} songs</span>
 
-                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                            {/* Change Folder Button */}
-                            {FolderPersistenceService.isSupported() ? (
-                                <button
-                                    className="btn btn-ghost btn-sm"
-                                    onClick={() => handleFolderSelect()}
-                                    disabled={isLoadingFolder}
-                                    title="Change Folder"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                                    </svg>
-                                </button>
-                            ) : (
-                                <label className="btn btn-ghost btn-sm" title="Change Folder">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                                    </svg>
-                                    <input
-                                        type="file"
-                                        // @ts-expect-error webkitdirectory is not standard
-                                        webkitdirectory=""
-                                        directory=""
-                                        onChange={handleFolderSelect}
-                                        multiple
-                                        disabled={isLoadingFolder}
-                                        style={{ display: 'none' }}
-                                    />
-                                </label>
-                            )}
-
-                            {/* Clear Folder Button (API Only) */}
-                            {FolderPersistenceService.isSupported() && (
-                                <button
-                                    className="btn btn-ghost btn-sm"
-                                    onClick={handleClearFolder}
-                                    disabled={isLoadingFolder}
-                                    title="Clear saved folder"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M3 6h18" />
-                                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                                    </svg>
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                    <div className="playlist">
-                        {playlist.map((item, idx) => (
-                            <div
-                                key={idx}
-                                onClick={() => playTrack(item, idx)}
-                                className={`playlist-item ${idx === currentIndex ? 'playlist-item--active' : ''}`}
-                            >
-                                <span className="playlist-item-index">{idx + 1}.</span>
-                                <span className="playlist-item-name">{item.name}</span>
-                                {item.lyricFile && <span className="playlist-item-badge">LRC</span>}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
 
             {/* Song Info Header - MOVED UP */}
             {audioSrc && (
@@ -1165,6 +1097,76 @@ export default function App() {
             {!audioSrc && (
                 <div className="card text-center" style={{ padding: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>
                     <p className="text-muted">Select a music folder to start playing.</p>
+                </div>
+            )}
+
+            {/* Playlist UI with header - MOVED TO BOTTOM */}
+            {playlist.length > 0 && (
+                <div className="playlist-section" style={{ marginTop: 'var(--space-4)' }}>
+                    <div className="playlist-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span className="playlist-count">{playlist.length} songs</span>
+
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            {/* Change Folder Button */}
+                            {FolderPersistenceService.isSupported() ? (
+                                <button
+                                    className="btn btn-ghost btn-sm"
+                                    onClick={() => handleFolderSelect()}
+                                    disabled={isLoadingFolder}
+                                    title="Change Folder"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                    </svg>
+                                </button>
+                            ) : (
+                                <label className="btn btn-ghost btn-sm" title="Change Folder">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                    </svg>
+                                    <input
+                                        type="file"
+                                        // @ts-expect-error webkitdirectory is not standard
+                                        webkitdirectory=""
+                                        directory=""
+                                        onChange={handleFolderSelect}
+                                        multiple
+                                        disabled={isLoadingFolder}
+                                        style={{ display: 'none' }}
+                                    />
+                                </label>
+                            )}
+
+                            {/* Clear Folder Button (API Only) */}
+                            {FolderPersistenceService.isSupported() && (
+                                <button
+                                    className="btn btn-ghost btn-sm"
+                                    onClick={handleClearFolder}
+                                    disabled={isLoadingFolder}
+                                    title="Clear saved folder"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M3 6h18" />
+                                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                    </svg>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="playlist">
+                        {playlist.map((item, idx) => (
+                            <div
+                                key={idx}
+                                onClick={() => playTrack(item, idx)}
+                                className={`playlist-item ${idx === currentIndex ? 'playlist-item--active' : ''}`}
+                            >
+                                <span className="playlist-item-index">{idx + 1}.</span>
+                                <span className="playlist-item-name">{item.name}</span>
+                                {item.lyricFile && <span className="playlist-item-badge">LRC</span>}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 
