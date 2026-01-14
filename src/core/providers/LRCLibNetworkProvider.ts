@@ -3,11 +3,18 @@ import { LyricsProvider } from "../interfaces/LyricsProvider";
 import { LyricResult } from "../interfaces/LyricResult";
 import { SongInformation } from "../interfaces/SongInformation";
 import { SearchQueryResolver } from "../utils/SearchQueryResolver";
+import { ApiClient } from "../api/ApiClient";
+import { HttpApiClient } from "../api/HttpApiClient";
 
 export class LRCLibNetworkProvider implements LyricsProvider {
     public name = "LRCLIB";
     private readonly API_BASE = "/api/lrclib";
+    private apiClient: ApiClient;
     private resolver = new SearchQueryResolver();
+
+    constructor(apiClient?: ApiClient) {
+        this.apiClient = apiClient || new HttpApiClient();
+    }
 
     public async search(song: SongInformation, limit: number = 8): Promise<LyricResult[]> {
         const uniqueQueries = await this.resolver.resolveQueries(song);
@@ -32,13 +39,7 @@ export class LRCLibNetworkProvider implements LyricsProvider {
 
             Logger.info(`[LRCLIB] Searching: ${searchUrl}`);
 
-            const response = await fetch(searchUrl);
-            if (!response.ok) {
-                Logger.warn(`[LRCLIB] Search failed with status ${response.status}`);
-                return [];
-            }
-
-            const data = await response.json();
+            const data = await this.apiClient.getJson<any>(searchUrl);
             if (Array.isArray(data)) {
                 return data.slice(0, limit).map((item) => this.mapToLyricResult(item));
             }

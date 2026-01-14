@@ -2,10 +2,12 @@
   "name": "echo-lyrics",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && tsc -p electron/tsconfig.json && node electron/create-package-json.cjs && vite build",
+    "electron:dev": "concurrently -k \"npm run dev\" \"wait-on tcp:5173 && tsc -p electron/tsconfig.json && node electron/create-package-json.cjs && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "electron:pack": "npm run build && electron-builder",
     "preview": "vite preview",
     "test": "vitest"
   },
@@ -31,9 +33,36 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.2",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.4.0",
     "jsdom": "^27.4.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.16",
+    "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "com.echolyrics.app",
+    "productName": "Echo Lyrics",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }

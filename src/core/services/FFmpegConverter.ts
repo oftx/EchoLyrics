@@ -1,9 +1,9 @@
-
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
 import { Logger } from '../utils/Logger';
+import { MediaConverter } from '../interfaces/MediaConverter';
 
-export class FFmpegConverter {
+export class FFmpegConverter implements MediaConverter {
     private ffmpeg: FFmpeg | null = null;
     private loaded = false;
 

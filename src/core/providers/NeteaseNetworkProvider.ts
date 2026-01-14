@@ -3,12 +3,19 @@ import { LyricsProvider } from "../interfaces/LyricsProvider";
 import { LyricResult } from "../interfaces/LyricResult";
 import { SongInformation } from "../interfaces/SongInformation";
 import { SearchQueryResolver } from "../utils/SearchQueryResolver";
+import { ApiClient } from "../api/ApiClient";
+import { HttpApiClient } from "../api/HttpApiClient";
 
 export class NeteaseNetworkProvider implements LyricsProvider {
     public name = "Netease Cloud Music";
     private readonly API_BASE = "/api/netease"; // Proxied path
+    private apiClient: ApiClient;
 
     private resolver = new SearchQueryResolver();
+
+    constructor(apiClient?: ApiClient) {
+        this.apiClient = apiClient || new HttpApiClient();
+    }
 
     public async search(song: SongInformation, limit: number = 8): Promise<LyricResult[]> {
         const uniqueQueries = await this.resolver.resolveQueries(song);
@@ -33,8 +40,7 @@ export class NeteaseNetworkProvider implements LyricsProvider {
 
             Logger.info(`[Netease] Searching: ${searchUrl}`);
 
-            const searchResponse = await fetch(searchUrl);
-            const searchData = await searchResponse.json();
+            const searchData = await this.apiClient.getJson<any>(searchUrl);
 
             if (searchData.code !== 200 || !searchData.result || !searchData.result.songs) {
                 Logger.warn(`[Netease] No songs found or API error. Code: ${searchData.code}`);
@@ -47,8 +53,7 @@ export class NeteaseNetworkProvider implements LyricsProvider {
             const lyricPromises = searchResults.map(async (track: any) => {
                 const lyricUrl = `${this.API_BASE}/api/song/lyric?os=pc&id=${track.id}&lv=-1&kv=-1&tv=-1`;
                 try {
-                    const lyricResponse = await fetch(lyricUrl);
-                    const lyricData = await lyricResponse.json();
+                    const lyricData = await this.apiClient.getJson<any>(lyricUrl);
 
                     if (lyricData.code === 200 && lyricData.lrc && lyricData.lrc.lyric) {
                         return {

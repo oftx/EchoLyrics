@@ -3,16 +3,23 @@ import { LyricsProvider } from "../interfaces/LyricsProvider";
 import { LyricResult } from "../interfaces/LyricResult";
 import { SongInformation } from "../interfaces/SongInformation";
 import { SearchQueryResolver } from "../utils/SearchQueryResolver";
+import { ApiClient } from "../api/ApiClient";
+import { HttpApiClient } from "../api/HttpApiClient";
 
 
 export class QQMusicNetworkProvider implements LyricsProvider {
     public name = "QQ Music";
     private readonly API_BASE = "/api/qq";
     private readonly API_DECRYPT = "/api/qq-decrypt";
+    private apiClient: ApiClient;
 
     // QRC Parser instance
 
     private resolver = new SearchQueryResolver();
+
+    constructor(apiClient?: ApiClient) {
+        this.apiClient = apiClient || new HttpApiClient();
+    }
 
     public async search(song: SongInformation, limit: number = 8): Promise<LyricResult[]> {
         const uniqueQueries = await this.resolver.resolveQueries(song);
@@ -38,8 +45,7 @@ export class QQMusicNetworkProvider implements LyricsProvider {
 
             Logger.info(`[QQMusic] Searching: ${searchUrl}`);
 
-            const searchResponse = await fetch(searchUrl);
-            const searchData = await searchResponse.json();
+            const searchData = await this.apiClient.getJson<any>(searchUrl);
 
             if (!searchData.data || !searchData.data.song || !searchData.data.song.list) {
                 Logger.warn(`[QQMusic] No songs found or API error. Code: ${searchData.code}`);
@@ -73,9 +79,7 @@ export class QQMusicNetworkProvider implements LyricsProvider {
             const lyricUrl = `${this.API_DECRYPT}?${params.toString()}`;
 
             try {
-                const res = await fetch(lyricUrl);
-                if (!res.ok) throw new Error(`Status ${res.status}`);
-                const json = await res.json();
+                const json = await this.apiClient.getJson<any>(lyricUrl);
 
                 if (json.lyric || json.trans) {
                     let lyricText = "";

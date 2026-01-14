@@ -23,16 +23,19 @@ interface PlaylistItem {
     isrc?: string;
 }
 
+import { ApiClientFactory } from '@/core/api/ApiClientFactory';
+
 // Singleton instance for the app
 const manager = new LyricsManager();
+const apiClient = ApiClientFactory.create();
 
 const metadataService = new MetadataService();
 
 // ... existing registerProviders ...
 // manager.getSearcher().registerProvider(new MockNetworkProvider());
-manager.getSearcher().registerProvider(new NeteaseNetworkProvider());
-manager.getSearcher().registerProvider(new QQMusicNetworkProvider());
-manager.getSearcher().registerProvider(new LRCLibNetworkProvider());
+manager.getSearcher().registerProvider(new NeteaseNetworkProvider(apiClient));
+manager.getSearcher().registerProvider(new QQMusicNetworkProvider(apiClient));
+manager.getSearcher().registerProvider(new LRCLibNetworkProvider(apiClient));
 
 // Helper function to format time as mm:ss
 const formatTime = (seconds: number): string => {
@@ -137,6 +140,34 @@ export default function App() {
             }
         }
     }, [audioSrc]);
+
+    // Detect environment and mode for state synchronization
+    const isElectron = 'electronAPI' in window && (window as any).electronAPI?.pip;
+    const isPiPMode = window.location.hash === '#/pip';
+
+    // Main window: Send state to PiP window
+    useEffect(() => {
+        if (isElectron && !isPiPMode && pipWindow) {
+            const state = { lyrics, currentTime, activeLineIndex, displayMode, searchTitle, searchArtist };
+            (window as any).electronAPI.pip.syncState(state);
+        }
+    }, [lyrics, currentTime, activeLineIndex, displayMode, searchTitle, searchArtist, pipWindow, isElectron, isPiPMode]);
+
+    // PiP window: Receive state from main window
+    useEffect(() => {
+        if (isElectron && isPiPMode) {
+            (window as any).electronAPI.pip.onStateUpdate((state: any) => {
+                setLyrics(state.lyrics);
+                setCurrentTime(state.currentTime);
+                setActiveLineIndex(state.activeLineIndex);
+                setDisplayMode(state.displayMode);
+                setSearchTitle(state.searchTitle);
+                setSearchArtist(state.searchArtist);
+            });
+        }
+    }, [isElectron, isPiPMode]);
+
+
 
     // Handle folder selection
     const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -337,56 +368,76 @@ export default function App() {
     };
 
     const togglePiP = async () => {
+        // Check if running in Electron
+        const isElectron = 'electronAPI' in window && (window as any).electronAPI?.pip;
+
         if (pipWindow) {
-            pipWindow.close();
+            // Close existing window
+            if (isElectron) {
+                await (window as any).electronAPI.pip.close();
+            } else if (pipWindow instanceof Window) {
+                pipWindow.close();
+            }
             setPipWindow(null);
             return;
         }
 
-        // Check compatibility
-        if (!("documentPictureInPicture" in window)) {
-            setStatusMsg("Picture-in-Picture API not supported in this browser.");
+        // Try Electron IPC first
+        if (isElectron) {
+            try {
+                const result = await (window as any).electronAPI.pip.open();
+                if (result.success) {
+                    // Set a marker object to track that PiP is open
+                    setPipWindow({} as Window);
+                    setStatusMsg(result.existed ? "PiP window focused" : "PiP window opened");
+                }
+            } catch (err) {
+                console.error("Failed to open Electron PiP window:", err);
+                setStatusMsg("Failed to open Pop-out window.");
+            }
             return;
         }
 
-        try {
-            // @ts-expect-error strict dom types might not have it yet
-            const win = await window.documentPictureInPicture.requestWindow({
-                width: 400,
-                height: 600,
-            });
+        // Fallback to browser documentPictureInPicture API
+        if ("documentPictureInPicture" in window) {
+            try {
+                // @ts-expect-error strict dom types might not have it yet
+                const win = await window.documentPictureInPicture.requestWindow({
+                    width: 400,
+                    height: 600,
+                });
 
-            // Copy styles
-            // We need to copy regular stylesheets and styled-components/injected styles
-            [...document.styleSheets].forEach((styleSheet) => {
-                try {
-                    const cssRules = [...styleSheet.cssRules].map((rule) => rule.cssText).join('');
-                    const style = document.createElement('style');
-                    style.textContent = cssRules;
-                    win.document.head.appendChild(style);
-                } catch (e) {
-                    const link = document.createElement('link');
-                    // If CORS prevents reading rules, link to it (works for same-origin or public)
-                    if (styleSheet.href) {
-                        link.rel = 'stylesheet';
-                        link.type = styleSheet.type;
-                        link.media = styleSheet.media.mediaText;
-                        link.href = styleSheet.href;
-                        win.document.head.appendChild(link);
+                // Copy styles
+                [...document.styleSheets].forEach((styleSheet) => {
+                    try {
+                        const cssRules = [...styleSheet.cssRules].map((rule) => rule.cssText).join('');
+                        const style = document.createElement('style');
+                        style.textContent = cssRules;
+                        win.document.head.appendChild(style);
+                    } catch (e) {
+                        const link = document.createElement('link');
+                        if (styleSheet.href) {
+                            link.rel = 'stylesheet';
+                            link.type = styleSheet.type;
+                            link.media = styleSheet.media.mediaText;
+                            link.href = styleSheet.href;
+                            win.document.head.appendChild(link);
+                        }
                     }
-                    console.log('e', e)
-                }
-            });
+                });
 
-            // Handle close
-            win.addEventListener("pagehide", () => {
-                setPipWindow(null);
-            });
+                // Handle close
+                win.addEventListener("pagehide", () => {
+                    setPipWindow(null);
+                });
 
-            setPipWindow(win);
-        } catch (err) {
-            console.error("Failed to open PiP window:", err);
-            setStatusMsg("Failed to open Pop-out window.");
+                setPipWindow(win);
+            } catch (err) {
+                console.error("Failed to open PiP window:", err);
+                setStatusMsg("Failed to open Pop-out window.");
+            }
+        } else {
+            setStatusMsg("Picture-in-Picture not supported.");
         }
     };
 
@@ -576,6 +627,41 @@ export default function App() {
 
 
 
+    // Render simplified PiP view if in PiP mode
+    if (isPiPMode) {
+        return (
+            <div style={{
+                height: '100vh',
+                width: '100%',
+                background: 'var(--bg-base)',
+                color: 'var(--text-primary)',
+                overflowY: 'auto',
+                padding: 'var(--space-5)',
+                boxSizing: 'border-box'
+            }}>
+                <div className="pip-header">
+                    <h2 className="pip-title">
+                        {lyrics?.metadata?.title || searchTitle || "Lyrics"}
+                    </h2>
+                    <div className="pip-artist">
+                        {lyrics?.metadata?.artist || searchArtist || ""}
+                    </div>
+                </div>
+                {lyrics ? (
+                    <LyricsList
+                        lyrics={lyrics}
+                        activeLineIndex={activeLineIndex}
+                        currentTime={currentTime}
+                        autoScroll={true}
+                        displayMode={displayMode}
+                        centerRatio={0.5}
+                        onLineClick={handleLyricClick}
+                    />
+                ) : <div className="lyrics-placeholder">No Lyrics Loaded</div>}
+            </div>
+        );
+    }
+
     return (
         <div className="app-container">
             <header className="app-header">
@@ -712,8 +798,8 @@ export default function App() {
                 )}
             </div>
 
-            {/* PiP Portal - Keep logical definition here or at bottom. Does not affect layout. */}
-            {pipWindow ? (
+            {/* PiP Portal - Only for browser documentPictureInPicture, not IPC windows */}
+            {pipWindow && pipWindow instanceof Window && pipWindow.document ? (
                 createPortal(
                     <div className="no-scrollbar" ref={pipContainerRef} style={{
                         height: '100vh',
