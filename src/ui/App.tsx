@@ -13,6 +13,7 @@ import { ExportManagerModal } from './components/ExportManagerModal';
 import { MetadataService } from '@/core/services/MetadataService';
 import { SearchQueryResolver } from '@/core/utils/SearchQueryResolver';
 import { LyricTypeDetector } from '@/core/utils/LyricTypeDetector';
+import { FolderPersistenceService } from '@/core/services/FolderPersistenceService';
 
 interface PlaylistItem {
     name: string;
@@ -90,6 +91,9 @@ export default function App() {
     const pipContainerRef = useRef<HTMLDivElement>(null);
     const logContainerRef = useRef<HTMLDivElement>(null);
 
+    // Folder persistence state
+    const [isLoadingFolder, setIsLoadingFolder] = useState(false);
+
     // Subscribe to Logger
     useEffect(() => {
         return Logger.subscribe((entry) => {
@@ -111,6 +115,48 @@ export default function App() {
         });
         return unsubscribe;
     }, []);
+
+    // Auto-restore folder on mount (File System Access API)
+    useEffect(() => {
+        const initFolder = async () => {
+            // Only try if API is supported
+            if (!FolderPersistenceService.isSupported()) {
+                Logger.info('[App] File System Access API not supported, using traditional file input');
+                return;
+            }
+
+            setIsLoadingFolder(true);
+            setStatusMsg('Checking for saved folder...');
+
+            try {
+                const dirHandle = await FolderPersistenceService.restoreSavedFolder();
+
+                if (dirHandle) {
+                    setStatusMsg(`Restoring folder: ${dirHandle.name}...`);
+                    const items = await FolderPersistenceService.readFilesFromFolder(dirHandle);
+
+                    if (items.length > 0) {
+                        setPlaylist(items);
+                        setStatusMsg(`Restored ${items.length} songs from ${dirHandle.name}`);
+                        // Auto-play first track
+                        playTrack(items[0], 0);
+                    } else {
+                        setStatusMsg('No audio files found in saved folder');
+                    }
+                } else {
+                    Logger.info('[App] No saved folder found or permission denied');
+                    setStatusMsg('');
+                }
+            } catch (error) {
+                Logger.error('[App] Failed to restore folder', error);
+                setStatusMsg('Failed to restore folder');
+            } finally {
+                setIsLoadingFolder(false);
+            }
+        };
+
+        initFolder();
+    }, []); // Run only once on mount
 
     // Auto-scroll logs
     useEffect(() => {
@@ -138,9 +184,41 @@ export default function App() {
         }
     }, [audioSrc]);
 
-    // Handle folder selection
-    const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files.length > 0) {
+    // Handle folder selection - supports both File System Access API and traditional input
+    const handleFolderSelect = async (e?: React.ChangeEvent<HTMLInputElement>) => {
+        setIsLoadingFolder(true);
+
+        try {
+            // If File System Access API is supported and no event (button click), use it
+            if (!e && FolderPersistenceService.isSupported()) {
+                setStatusMsg('Opening folder picker...');
+                const dirHandle = await FolderPersistenceService.selectFolder();
+
+                if (dirHandle) {
+                    setStatusMsg(`Loading folder: ${dirHandle.name}...`);
+                    const items = await FolderPersistenceService.readFilesFromFolder(dirHandle);
+
+                    if (items.length > 0) {
+                        setPlaylist(items);
+                        setStatusMsg(`Loaded ${items.length} songs from ${dirHandle.name}`);
+                        playTrack(items[0], 0);
+                    } else {
+                        setStatusMsg('No audio files found in folder');
+                    }
+                } else {
+                    setStatusMsg('No folder selected');
+                }
+                return;
+            }
+
+            // Fallback to traditional file input
+            if (!e || !e.target.files || e.target.files.length === 0) {
+                setStatusMsg('No files selected');
+                return;
+            }
+
+            setStatusMsg('Loading files...');
+
             const files = Array.from(e.target.files);
             const audioExtensions = ['.mp3', '.flac', '.wav', '.ogg', '.m4a'];
             const lyricExtensions = ['.lrc', '.txt', '.json', '.qrc'];
@@ -195,6 +273,31 @@ export default function App() {
                 playTrack(newPlaylist[0], 0);
             }
             setStatusMsg(`Loaded ${newPlaylist.length} songs.`);
+        } catch (error) {
+            Logger.error('[App] Failed to load folder', error);
+            setStatusMsg('Failed to load folder');
+        } finally {
+            setIsLoadingFolder(false);
+        }
+    };
+
+    // Handle clearing saved folder
+    const handleClearFolder = async () => {
+        if (!confirm('Are you sure you want to clear the saved folder? You will need to select it again next time.')) {
+            return;
+        }
+
+        try {
+            await FolderPersistenceService.clearSavedFolder();
+            setPlaylist([]);
+            setAudioSrc(null);
+            setCurrentIndex(-1);
+            setLyrics(null);
+            setStatusMsg('Saved folder cleared');
+            Logger.info('[App] Cleared saved folder');
+        } catch (error) {
+            Logger.error('[App] Failed to clear saved folder', error);
+            setStatusMsg('Failed to clear folder');
         }
     };
 
@@ -584,39 +687,31 @@ export default function App() {
 
             {/* Folder Input - Only show if no playlist */}
             {playlist.length === 0 && (
-                <label className="upload-zone">
+                <div className="upload-zone">
                     <span className="upload-zone-label">Select Music Folder</span>
-                    <span className="upload-zone-trigger btn btn-secondary">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="17 8 12 3 7 8" />
-                            <line x1="12" y1="3" x2="12" y2="15" />
-                        </svg>
-                        Choose Files
-                    </span>
-                    <input
-                        type="file"
-                        // @ts-expect-error webkitdirectory is not standard
-                        webkitdirectory=""
-                        directory=""
-                        onChange={handleFolderSelect}
-                        multiple
-                    />
-                </label>
-            )}
 
-            {/* Playlist UI with header */}
-            {playlist.length > 0 && (
-                <div className="playlist-section">
-                    <div className="playlist-header">
-                        <span className="playlist-count">{playlist.length} songs</span>
-                        <label className="btn btn-ghost btn-sm">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    {FolderPersistenceService.isSupported() ? (
+                        <button
+                            className="upload-zone-trigger btn btn-secondary"
+                            onClick={() => handleFolderSelect()}
+                            disabled={isLoadingFolder}
+                            style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 auto' }}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                 <polyline points="17 8 12 3 7 8" />
                                 <line x1="12" y1="3" x2="12" y2="15" />
                             </svg>
-                            Change Folder
+                            Select Folder
+                        </button>
+                    ) : (
+                        <label className="upload-zone-trigger btn btn-secondary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="17 8 12 3 7 8" />
+                                <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                            Choose Files
                             <input
                                 type="file"
                                 // @ts-expect-error webkitdirectory is not standard
@@ -627,6 +722,63 @@ export default function App() {
                                 style={{ display: 'none' }}
                             />
                         </label>
+                    )}
+                </div>
+            )}
+
+            {/* Playlist UI with header */}
+            {playlist.length > 0 && (
+                <div className="playlist-section">
+                    <div className="playlist-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span className="playlist-count">{playlist.length} songs</span>
+
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            {/* Change Folder Button */}
+                            {FolderPersistenceService.isSupported() ? (
+                                <button
+                                    className="btn btn-ghost btn-sm"
+                                    onClick={() => handleFolderSelect()}
+                                    disabled={isLoadingFolder}
+                                    title="Change Folder"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                    </svg>
+                                </button>
+                            ) : (
+                                <label className="btn btn-ghost btn-sm" title="Change Folder">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                    </svg>
+                                    <input
+                                        type="file"
+                                        // @ts-expect-error webkitdirectory is not standard
+                                        webkitdirectory=""
+                                        directory=""
+                                        onChange={handleFolderSelect}
+                                        multiple
+                                        disabled={isLoadingFolder}
+                                        style={{ display: 'none' }}
+                                    />
+                                </label>
+                            )}
+
+                            {/* Clear Folder Button (API Only) */}
+                            {FolderPersistenceService.isSupported() && (
+                                <button
+                                    className="btn btn-ghost btn-sm"
+                                    onClick={handleClearFolder}
+                                    disabled={isLoadingFolder}
+                                    title="Clear saved folder"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M3 6h18" />
+                                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                    </svg>
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div className="playlist">
                         {playlist.map((item, idx) => (
