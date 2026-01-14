@@ -15,6 +15,7 @@ import { MetadataService } from '@/core/services/MetadataService';
 import { SearchQueryResolver } from '@/core/utils/SearchQueryResolver';
 import { LyricTypeDetector } from '@/core/utils/LyricTypeDetector';
 import { FolderPersistenceService } from '@/core/services/FolderPersistenceService';
+import { PreferencesService } from '@/core/services/PreferencesService';
 
 interface PlaylistItem {
     name: string;
@@ -47,14 +48,17 @@ const formatTime = (seconds: number): string => {
 };
 
 export default function App() {
+    // Load initial preferences
+    const prefs = useRef(PreferencesService.getPreferences()).current;
+
     const [lyrics, setLyrics] = useState<LyricsData | null>(null);
     const [currentTime, setCurrentTime] = useState(0);
     const [activeLineIndex, setActiveLineIndex] = useState(-1);
-    const [lyricOffset, setLyricOffset] = useState(0); // Global offset in ms
+    const [lyricOffset, setLyricOffset] = useState(prefs.lyricOffset); // Global offset in ms
     // const [currentSongSignature, setCurrentSongSignature] = useState<string>(""); // Unused
     const [showCandidates, setShowCandidates] = useState(false);
     const [candidates, setCandidates] = useState<any[]>([]);
-    const [displayMode, setDisplayMode] = useState<DisplayMode>(manager.getDisplayMode());
+    const [displayMode, setDisplayMode] = useState<DisplayMode>(prefs.displayMode);
 
     const handleDisplayModeChange = (mode: DisplayMode) => {
         manager.setDisplayMode(mode);
@@ -73,14 +77,16 @@ export default function App() {
     // Search form state
     const [searchTitle, setSearchTitle] = useState("Sample Song");
     const [searchArtist, setSearchArtist] = useState("Artist A");
-    const [searchLimit, setSearchLimit] = useState(15);
+
+    const [searchLimit, setSearchLimit] = useState(prefs.searchLimit);
     const [statusMsg, setStatusMsg] = useState("");
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [showExportModal, setShowExportModal] = useState(false);
     const [isConverting, setIsConverting] = useState(false);
     const [showLogs, setShowLogs] = useState(false);
-    const [useNativePlayer, setUseNativePlayer] = useState(false);
+    const [useNativePlayer, setUseNativePlayer] = useState(prefs.useNativePlayer);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [volume, setVolume] = useState(prefs.volume); // Add volume state
     const [audioDuration, setAudioDuration] = useState(0);
 
     const audioRef = useRef<HTMLAudioElement>(null);
@@ -88,7 +94,7 @@ export default function App() {
 
     // Album Art State
     const [albumArtUrl, setAlbumArtUrl] = useState<string | null>(null);
-    const [showAlbumArt, setShowAlbumArt] = useState(true);
+    const [showAlbumArt, setShowAlbumArt] = useState(prefs.showAlbumArt);
     const pipContainerRef = useRef<HTMLDivElement>(null);
     const logContainerRef = useRef<HTMLDivElement>(null);
 
@@ -132,7 +138,7 @@ export default function App() {
             setStatusMsg('Checking for saved folder...');
 
             try {
-                const dirHandle = await FolderPersistenceService.restoreSavedFolder();
+                const dirHandle = await FolderPersistenceService.restoreSavedFolder(prefs.lastActiveFolderName);
 
                 if (dirHandle) {
                     setStatusMsg(`Restoring folder: ${dirHandle.name}...`);
@@ -141,8 +147,27 @@ export default function App() {
                     if (items.length > 0) {
                         setPlaylist(items);
                         setStatusMsg(`Restored ${items.length} songs from ${dirHandle.name}`);
-                        // Auto-play first track
-                        playTrack(items[0], 0);
+                        setStatusMsg(`Restored ${items.length} songs from ${dirHandle.name}`);
+                        // Auto-play / Restore logic is handled in handleFolderSelect-like logic
+                        // But since we duplicated logic, let's just do it here too:
+                        const lastSongName = prefs.lastPlayedSongName;
+                        let foundIndex = -1;
+                        if (lastSongName) {
+                            foundIndex = items.findIndex(p => p.name === lastSongName);
+                        }
+
+                        if (foundIndex !== -1) {
+                            playTrack(items[foundIndex], foundIndex, prefs.lastPlaybackTime);
+                            // If restoring, maybe we pause initially? Or play?
+                            // Usually "restore" implies "ready to play". But browsers block auto-play.
+                            // So the audio element will likely refuse to play() until interaction.
+                            // We should probably just set the Src and Time, but NOT call .play() immediately 
+                            // if interaction is missing.
+                            // BUT playTrack calls .play(). We can add a flag.
+                        } else {
+                            // If no restoration, play first
+                            playTrack(items[0], 0);
+                        }
                     } else {
                         setStatusMsg('No audio files found in saved folder');
                     }
@@ -212,6 +237,7 @@ export default function App() {
                     if (items.length > 0) {
                         setPlaylist(items);
                         setStatusMsg(`Loaded ${items.length} songs from ${dirHandle.name}`);
+                        PreferencesService.savePreferences({ lastActiveFolderName: dirHandle.name });
                         playTrack(items[0], 0);
                     } else {
                         setStatusMsg('No audio files found in folder');
@@ -281,7 +307,22 @@ export default function App() {
 
             setPlaylist(newPlaylist);
             if (newPlaylist.length > 0) {
-                playTrack(newPlaylist[0], 0);
+                // Check if we should restore a specific song
+                const lastSongName = prefs.lastPlayedSongName;
+                let foundIndex = -1;
+
+                if (lastSongName) {
+                    foundIndex = newPlaylist.findIndex(p => p.name === lastSongName);
+                }
+
+                if (foundIndex !== -1) {
+                    setStatusMsg(`Resuming ${lastSongName}...`);
+                    // We need to pass the start time
+                    playTrack(newPlaylist[foundIndex], foundIndex, prefs.lastPlaybackTime);
+                } else {
+                    // Default behavior
+                    playTrack(newPlaylist[0], 0);
+                }
             }
             setStatusMsg(`Loaded ${newPlaylist.length} songs.`);
         } catch (error) {
@@ -312,7 +353,7 @@ export default function App() {
         }
     };
 
-    const playTrack = async (item: PlaylistItem, index: number) => {
+    const playTrack = async (item: PlaylistItem, index: number, startTime: number = 0) => {
         // Cleanup previous
         setLyrics(null);
         setCurrentTime(-lyricOffset); // Initial synced time
@@ -325,6 +366,19 @@ export default function App() {
         const url = URL.createObjectURL(item.audioFile);
         setAudioSrc(url);
         setCurrentIndex(index);
+
+        // Wait for audio to load to seek? 
+        // We can set currentTime on the element immediately after assigning src, 
+        // but robust way is to wait for loadedmetadata.
+        // However, we can store a ref "pendingSeek" and apply it in effect/callback.
+        if (startTime > 0) {
+            // We can try setting it on the ref in a moment
+            setTimeout(() => {
+                if (audioRef.current) {
+                    audioRef.current.currentTime = startTime;
+                }
+            }, 100);
+        }
 
         // Update Search Info (Visual only)
         setSearchTitle(item.title || item.name);
@@ -442,6 +496,63 @@ export default function App() {
 
         setStatusMsg("Error playing audio: " + (error?.message || "Unknown error"));
     };
+
+
+    // Persist Preferences (Debounced for some, immediate for others)
+    useEffect(() => {
+        PreferencesService.savePreferences({
+            showAlbumArt,
+            searchLimit,
+            lyricOffset,
+            displayMode,
+            useNativePlayer,
+            // Volume is saved in its own effect or when changed
+        });
+        // Make sure manager uses the mode too
+        manager.setDisplayMode(displayMode);
+    }, [showAlbumArt, searchLimit, lyricOffset, displayMode, useNativePlayer]);
+
+    // Volume persistence
+    useEffect(() => {
+        PreferencesService.savePreferences({ volume });
+        if (audioRef.current) {
+            audioRef.current.volume = volume;
+        }
+    }, [volume]);
+
+    // Playback state persistence (save periodically)
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (audioRef.current && !audioRef.current.paused && currentIndex >= 0) {
+                const currentItem = playlist[currentIndex];
+                if (currentItem) {
+                    PreferencesService.savePreferences({
+                        lastPlayedSongName: currentItem.name,
+                        lastPlaybackTime: audioRef.current.currentTime
+                    });
+                }
+            }
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [currentIndex, playlist]);
+
+    // Save on pause/unload
+    useEffect(() => {
+        const handleUnload = () => {
+            if (audioRef.current && currentIndex >= 0) {
+                const currentItem = playlist[currentIndex];
+                if (currentItem) {
+                    PreferencesService.savePreferences({
+                        lastPlayedSongName: currentItem.name,
+                        lastPlaybackTime: audioRef.current.currentTime
+                    });
+                }
+            }
+        };
+        window.addEventListener('beforeunload', handleUnload);
+        return () => window.removeEventListener('beforeunload', handleUnload);
+    }, [currentIndex, playlist]);
+
 
     // Auto-next when audio ends
     const handleAudioEnded = () => {
@@ -1033,6 +1144,7 @@ export default function App() {
                         onPlay={() => setIsPlaying(true)}
                         onPause={() => setIsPlaying(false)}
                         style={{ display: useNativePlayer ? 'block' : 'none', width: '100%' }}
+                        onVolumeChange={(e) => setVolume(e.currentTarget.volume)}
                     />
                     {!useNativePlayer && (
                         <div className="custom-player">
@@ -1086,7 +1198,13 @@ export default function App() {
                                 className="custom-player-btn"
                                 onClick={() => {
                                     if (audioRef.current) {
-                                        audioRef.current.muted = !audioRef.current.muted;
+                                        const newMuted = !audioRef.current.muted;
+                                        audioRef.current.muted = newMuted;
+                                        // Force volume update if unmuted?
+                                        if (!newMuted && audioRef.current.volume === 0) {
+                                            audioRef.current.volume = 1;
+                                            setVolume(1);
+                                        }
                                     }
                                 }}
                             >
@@ -1230,6 +1348,7 @@ export default function App() {
                         if (items.length > 0) {
                             setPlaylist(items);
                             setStatusMsg(`Loaded ${items.length} songs from ${handle.name}`);
+                            PreferencesService.savePreferences({ lastActiveFolderName: handle.name });
                             playTrack(items[0], 0);
                         } else {
                             setStatusMsg('No audio files found in folder');

@@ -317,11 +317,17 @@ export class FolderPersistenceService {
      * Restore logic for single-folder auto-load 
      * (We can just return the first one for backwards compatibility / auto-start)
      */
-    public static async restoreSavedFolder(): Promise<FileSystemDirectoryHandle | null> {
+    public static async restoreSavedFolder(preferredName?: string | null): Promise<FileSystemDirectoryHandle | null> {
         const handles = await this.getSavedFolderHandles();
         if (handles.length > 0) {
-            // Just try the first one for auto-restore
-            const handle = handles[0];
+            let handle = handles[0];
+
+            // Try to find the preferred one
+            if (preferredName) {
+                const found = handles.find(h => h.name === preferredName);
+                if (found) handle = found;
+            }
+
             if (await this.verifyPermission(handle)) {
                 return handle;
             }
