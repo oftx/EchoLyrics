@@ -711,10 +711,53 @@ body {
 }
 
 /* Syllable highlighting */
+:root {
+  /* Global Animation Config */
+  --anim-rise-distance: -2px;
+  
+  /* Intensity Config: Scale, Glow-Blur */
+  --conf-scale-low: 1.0;
+  --conf-scale-med: 1.05;
+  --conf-scale-high: 1.08;
+  
+  --conf-glow-low: 0px;
+  --conf-glow-med: 8px;
+  --conf-glow-high: 12px;
+
+  /* Durations */
+  --lyric-anim-duration-fast: 150ms;
+  --lyric-anim-duration-normal: 250ms;
+  --lyric-anim-easing: cubic-bezier(0.33, 1, 0.68, 1);
+}
+
 .lyric-syllable {
   display: inline-block;
-  transition: opacity 150ms ease-out;
   white-space: pre-wrap;
+  transform-origin: center bottom;
+  will-change: transform, opacity, filter;
+  transition: 
+      opacity var(--lyric-anim-duration-fast) var(--lyric-anim-easing),
+      transform var(--lyric-anim-duration-normal) var(--lyric-anim-easing),
+      filter var(--lyric-anim-duration-normal) ease-out;
+  
+  /* Default (Upcoming) */
+  opacity: 0.5;
+  transform: translateY(0) scale(1);
+  filter: none;
+}
+
+/* Intensity Mapping */
+.lyric-syllable[data-intensity="low"] {
+  --max-scale: var(--conf-scale-low);
+  --max-glow: var(--conf-glow-low);
+}
+.lyric-syllable[data-intensity="medium"] {
+  --max-scale: var(--conf-scale-med);
+  --max-glow: var(--conf-glow-med);
+}
+.lyric-syllable[data-intensity="high"] {
+  --max-scale: var(--conf-scale-high);
+  --max-glow: var(--conf-glow-high);
 }
 
 /* Only apply purple color to syllables in active lines */
@@ -722,16 +765,33 @@ body {
   color: var(--primary-light);
 }
 
-.lyric-syllable--passed {
-  opacity: 1; /* 100% - fully visible */
-}
-
+/* Active State */
 .lyric-syllable--active {
-  opacity: 1; /* Transition to 100% as it's being sung */
+  /* Persistent: Opacity 0.5 -> 1.0 */
+  opacity: calc(0.5 + var(--syl-progress, 0) * 0.5);
+  
+  /* Persistent: Rise 0 -> -4px */
+  /* Transient: Scale 1 -> Max -> 1 */
+  transform: 
+      translateY(calc(var(--anim-rise-distance) * var(--syl-progress, 0)))
+      scale(calc(1 + (var(--max-scale) - 1) * var(--syl-peak, 0)));
+      
+  /* Transient: Glow 0 -> Max -> 0 */
+  filter: drop-shadow(0 0 calc(var(--max-glow) * var(--syl-peak, 0)) var(--primary-glow));
 }
 
+/* Passed State */
+.lyric-syllable--passed {
+  opacity: 1;
+  transform: translateY(var(--anim-rise-distance)) scale(1);
+  filter: none;
+}
+
+/* Fallback/Legacy State Classes (mostly handled above, explicitly resetting) */
 .lyric-syllable--upcoming {
-  opacity: 0.5; /* 50% - dimmed but readable */
+  opacity: 0.5;
+  transform: translateY(0) scale(1);
+  filter: none;
 }
 
 /* --------------------------------------------------------------------------

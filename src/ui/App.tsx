@@ -796,7 +796,64 @@ export default function App() {
         }
     };
 
-    // Sync loop using audio event
+    const animationFrameRef = useRef<number | null>(null);
+
+    // Sync loop using RAF for 60fps smooth animation
+    useEffect(() => {
+        const audio = audioRef.current;
+        if (!audio || !lyrics) return;
+
+        const loop = () => {
+            if (!audio.paused && !audio.ended) {
+                const realTime = audio.currentTime * 1000;
+                const syncedTime = realTime - lyricOffset;
+                setCurrentTime(syncedTime);
+
+                const idx = manager.getSynchronizer().findLineIndex(lyrics, syncedTime);
+                if (idx !== activeLineIndex) {
+                    setActiveLineIndex(idx);
+                }
+
+                animationFrameRef.current = requestAnimationFrame(loop);
+            }
+        };
+
+        const onPlay = () => {
+            animationFrameRef.current = requestAnimationFrame(loop);
+        };
+
+        const onPause = () => {
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+        };
+
+        audio.addEventListener('play', onPlay);
+        audio.addEventListener('pause', onPause);
+        audio.addEventListener('ended', onPause);
+        // Also listen for seeked to update immediately even if paused
+        audio.addEventListener('seeked', handleTimeUpdate);
+
+        if (!audio.paused) onPlay();
+
+        return () => {
+            audio.removeEventListener('play', onPlay);
+            audio.removeEventListener('pause', onPause);
+            audio.removeEventListener('ended', onPause);
+            audio.removeEventListener('seeked', handleTimeUpdate);
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+        };
+    }, [lyrics, lyricOffset, activeLineIndex]); // Added activeLineIndex to deps to allow update? Actually loop uses closure, might be stale?
+    // Wait, loop defines realTime from audioRef.current, which is ref, so it's fine.
+    // setCurrentTime is state setter.
+    // manager is singleton.
+    // But lyrics is state. If lyrics change, effect re-runs.
+    // The issue with closure is 'lyricOffset'.
+    // UseEffect dependency [lyrics, lyricOffset] is correct.
+
+    // Fallback / Manual update (e.g. scrubbing while paused)
     const handleTimeUpdate = () => {
         if (audioRef.current) {
             const realTime = audioRef.current.currentTime * 1000;
@@ -1653,29 +1710,48 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, displayM
                                         const isSylActive = currentTime >= sylAbsStart && currentTime < sylAbsEnd;
 
                                         let sylClass = 'lyric-syllable';
-                                        let opacityStyle: React.CSSProperties = {};
+                                        let sylDataState = 'upcoming';
+                                        let sylStyle: React.CSSProperties = {};
+
+                                        // Calculate Intensity based on duration
+                                        let intensity = 'medium';
+                                        // Short < 200ms, Long > 400ms
+                                        if (syl.duration < 200) intensity = 'low';
+                                        else if (syl.duration > 400) intensity = 'high';
 
                                         if (isActive) {
                                             if (isSylPassed) {
                                                 sylClass += ' lyric-syllable--passed';
-                                                // Fully visible
-                                                opacityStyle.opacity = 1;
+                                                sylDataState = 'passed';
                                             } else if (isSylActive) {
                                                 sylClass += ' lyric-syllable--active';
-                                                // Calculate progress through this syllable (0 to 1)
+                                                sylDataState = 'active';
+
+                                                // Calculate progress (0 -> 1)
                                                 const progress = (currentTime - sylAbsStart) / syl.duration;
-                                                // Map progress to opacity: 0.5 → 1.0
-                                                const opacity = 0.5 + (progress * 0.5);
-                                                opacityStyle.opacity = Math.min(1, Math.max(0.5, opacity));
+
+                                                // Calculate parabolic peak (0 -> 1 -> 0) for transient effects
+                                                // Formula: 1 - (2x - 1)^2
+                                                const peak = 1 - Math.pow(2 * progress - 1, 2);
+
+                                                sylStyle = {
+                                                    '--syl-progress': progress.toFixed(3),
+                                                    '--syl-peak': Math.max(0, peak).toFixed(3)
+                                                } as React.CSSProperties;
                                             } else {
                                                 sylClass += ' lyric-syllable--upcoming';
-                                                // Dimmed
-                                                opacityStyle.opacity = 0.5;
+                                                sylDataState = 'upcoming';
                                             }
                                         }
 
                                         return (
-                                            <span key={sylIdx} className={sylClass} style={opacityStyle}>
+                                            <span
+                                                key={sylIdx}
+                                                className={sylClass}
+                                                style={sylStyle}
+                                                data-state={sylDataState}
+                                                data-intensity={intensity}
+                                            >
                                                 {syl.text}
                                             </span>
                                         );
