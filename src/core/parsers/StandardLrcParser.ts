@@ -6,9 +6,9 @@ import { LyricsData, LyricsLine } from "../models/LyricsData";
  * Spec Reference: 2.2.1 Sample 1
  */
 export class StandardLrcParser implements LyricsParser {
-    // Regex to match [mm:ss.xx] or [mm:ss.xxx]
-    // Group 1: mm, Group 2: ss.xx
-    private static TIMESTAMP_REGEX = /\[(\d{2}):(\d{2}(?:\.\d{2,3})?)\]/g;
+    // Regex to match [mm:ss.xx] or [mm:ss.xxx] or [mm:ss:xx] (non-standard)
+    // Group 1: mm, Group 2: ss.xx or ss:xx
+    private static TIMESTAMP_REGEX = /\[(\d{2}):(\d{2}(?:[.:]\d{2,3})?)\]/g;
     private static META_REGEX = /\[([a-zA-Z]+):([^\]]+)\]/;
 
     public parse(rawText: string): LyricsData {
@@ -48,7 +48,9 @@ export class StandardLrcParser implements LyricsParser {
 
                 for (const match of matches) {
                     const minutes = parseInt(match[1], 10);
-                    const seconds = parseFloat(match[2]);
+                    // Normalize the separator: replace ':' with '.' to handle both [mm:ss.ms] and [mm:ss:ms]
+                    const secondsStr = match[2].replace(':', '.');
+                    const seconds = parseFloat(secondsStr);
                     const timeMs = Math.round((minutes * 60 + seconds) * 1000);
 
                     parsedEntries.push({
