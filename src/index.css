@@ -594,7 +594,7 @@ body {
 .lyrics-container {
   position: relative;
   height: 420px;
-  background: linear-gradient(180deg, var(--bg-card) 0%, rgba(26, 26, 36, 0.95) 100%);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   /* Removed large padding to prevent wasting space, mask handles the fade */
