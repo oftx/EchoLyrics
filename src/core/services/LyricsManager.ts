@@ -470,38 +470,37 @@ export class LyricsManager {
             }
         }
 
-        // Don't save full text for non-selected items? 
-        // No, we might want to switch to them. But maybe we can truncate if needed.
-        // For now, limiting count is a huge win (15 -> 5).
-
         const entry = {
             results: resultsToSave,
             selectedId,
             lastAccessed: Date.now()
         };
 
-        try {
-            const cache = this.loadCache();
-            cache[key] = entry;
-            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(cache));
-        } catch (e: any) {
-            if (e.name === 'QuotaExceededError' || e.code === 22 || e.number === -2147024882) {
-                Logger.warn("[LyricsManager] Storage quota exceeded. Pruning cache...");
-                if (this.pruneCache()) {
-                    // Retry once
-                    try {
-                        const cache = this.loadCache();
-                        cache[key] = entry;
-                        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(cache));
-                        Logger.info("[LyricsManager] Cache saved after pruning.");
-                    } catch (retryError) {
-                        Logger.error("[LyricsManager] Failed to save cache even after pruning.", retryError);
+        const maxRetries = 5;
+        let attempts = 0;
+
+        while (attempts < maxRetries) {
+            try {
+                const cache = this.loadCache();
+                cache[key] = entry;
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(cache));
+                if (attempts > 0) {
+                    Logger.info(`[LyricsManager] Cache saved after ${attempts} pruning attempts.`);
+                }
+                return; // Success
+            } catch (e: any) {
+                if (e.name === 'QuotaExceededError' || e.code === 22 || e.number === -2147024882) {
+                    attempts++;
+                    Logger.warn(`[LyricsManager] Storage quota exceeded. Pruning attempt ${attempts}...`);
+
+                    if (!this.pruneCache()) {
+                        Logger.error("[LyricsManager] Could not prune enough space to save cache.");
+                        break; // Stop if pruning fails/returns false (no more space to free)
                     }
                 } else {
-                    Logger.error("[LyricsManager] Could not prune enough space to save cache.");
+                    console.error("Failed to save lyric cache", e);
+                    break;
                 }
-            } else {
-                console.error("Failed to save lyric cache", e);
             }
         }
     }
@@ -509,6 +508,10 @@ export class LyricsManager {
     /**
      * Removes old entries to free up space.
      * Returns true if anything was removed.
+     * 
+     * Strategy:
+     * 1. First, try to remove UNUSED candidates (non-selected) from existing entries.
+     * 2. If no unused candidates found, remove oldest Song entries.
      */
     private pruneCache(): boolean {
         try {
@@ -516,8 +519,45 @@ export class LyricsManager {
             const keys = Object.keys(cache);
             if (keys.length === 0) return false;
 
+            let spaceFreed = false;
+
+            // STAGE 1: Minimalist Pruning (Remove unused candidates)
+            // Iterate through all entries, if any entry has > 1 result, keep ONLY the selected one.
+            for (const key of keys) {
+                const entry = cache[key];
+                if (entry && entry.results && entry.results.length > 1) {
+                    const originalCount = entry.results.length;
+
+                    if (entry.selectedId) {
+                        const selected = entry.results.find((r: any) => r.id === entry.selectedId);
+                        if (selected) {
+                            entry.results = [selected];
+                        } else {
+                            // Selected ID not found? Just keep first.
+                            entry.results = [entry.results[0]];
+                        }
+                    } else {
+                        // No selection, just keep the first one
+                        entry.results = [entry.results[0]];
+                    }
+
+                    if (entry.results.length < originalCount) {
+                        spaceFreed = true;
+                    }
+                }
+            }
+
+            if (spaceFreed) {
+                Logger.info("[LyricsManager] Pruned unused candidates from cache entries.");
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(cache));
+                return true;
+            }
+
+            // STAGE 2: Aggressive Pruning (Remove oldest entries)
+            // If we are here, it means all entries are already minimal (1 result each).
+            // We must delete entire song entries.
+
             // Sort by lastAccessed (oldest first)
-            // If lastAccessed is missing, treat as very old (0)
             const entries = keys.map(k => ({
                 key: k,
                 lastAccessed: cache[k].lastAccessed || 0
@@ -534,7 +574,7 @@ export class LyricsManager {
             });
 
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(cache));
-            Logger.info(`[LyricsManager] Pruned ${deleteCount} entries from cache.`);
+            Logger.info(`[LyricsManager] Pruned ${deleteCount} oldest entries from cache.`);
             return true;
         } catch (e) {
             Logger.error("[LyricsManager] Error while pruning cache", e);
