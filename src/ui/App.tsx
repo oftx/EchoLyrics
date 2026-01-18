@@ -1747,6 +1747,8 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, displayM
                                         if (syl.duration < 200) intensity = 'low';
                                         else if (syl.duration > 400) intensity = 'high';
 
+                                        const maxScale = 1 + 0.05 * Math.log10(1 + syl.duration / 1000 * 1.14514);
+
                                         if (isActive) {
                                             if (isSylPassed) {
                                                 sylClass += ' lyric-syllable--passed';
@@ -1764,7 +1766,8 @@ function LyricsList({ lyrics, activeLineIndex, currentTime, autoScroll, displayM
 
                                                 sylStyle = {
                                                     '--syl-progress': progress.toFixed(3),
-                                                    '--syl-peak': Math.max(0, peak).toFixed(3)
+                                                    '--syl-peak': Math.max(0, peak).toFixed(3),
+                                                    '--max-scale': maxScale.toFixed(3)
                                                 } as React.CSSProperties;
                                             } else {
                                                 sylClass += ' lyric-syllable--upcoming';

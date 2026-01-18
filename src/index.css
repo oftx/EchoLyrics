@@ -713,7 +713,7 @@ body {
 /* Syllable highlighting */
 :root {
   /* Global Animation Config */
-  --anim-rise-distance: -2px;
+  --anim-rise-distance: -1px;
   
   /* Intensity Config: Scale, Glow-Blur */
   --conf-scale-low: 1.0;
@@ -768,7 +768,7 @@ body {
 /* Active State */
 .lyric-syllable--active {
   /* Persistent: Opacity 0.5 -> 1.0 */
-  opacity: calc(0.5 + var(--syl-progress, 0) * 0.5);
+  opacity: calc(0.5 + var(--syl-progress, 0));
   
   /* Persistent: Rise 0 -> -4px */
   /* Transient: Scale 1 -> Max -> 1 */
