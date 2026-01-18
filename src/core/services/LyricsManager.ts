@@ -140,12 +140,15 @@ export class LyricsManager {
      * @param options.ignoreCache If true, bypasses the search cache (forces new search).
      * @param options.limit Max results.
      */
-    public async loadLyricsForSong(song: SongInformation, options?: { ignoreCache?: boolean, limit?: number, localFileContent?: string }): Promise<boolean> {
+    public async loadLyricsForSong(song: SongInformation, options?: { ignoreCache?: boolean, limit?: number, localFileContent?: string, onProgress?: (msg: string) => void }): Promise<boolean> {
         this.lastResults = []; // Clear previous
         this.currentLyrics = null; // Reset current lyrics state for new song
         this.notifyListeners(); // Notify UI to clear
 
         const limit = options?.limit || 15;
+        const onProgress = options?.onProgress;
+
+        if (onProgress) onProgress("Checking cache...");
 
         // Key for PERSISTENCE (Which result did I choose for this file?)
         // Prefer persistenceId (filename) if available.
@@ -187,6 +190,7 @@ export class LyricsManager {
                 if (!cachedEntry || !cachedEntry.selectedId) {
                     // No user override -> Use Embedded
                     this.lastResults = [embeddedResult];
+                    if (onProgress) onProgress("Using embedded lyrics.");
                     return this.selectLyric(0, false);
                 }
             }
@@ -228,6 +232,7 @@ export class LyricsManager {
                     // but select the local file by default.
 
                     // Let's add it to a "pending" list or just remember it.
+                    if (onProgress) onProgress("Using local lyrics file.");
                 }
             }
             // For now, let's push it to a temp array or just modify flow. 
@@ -280,6 +285,7 @@ export class LyricsManager {
                 const idx = this.lastResults.findIndex(r => r.id === cachedEntry.selectedId);
                 if (idx !== -1) {
                     Logger.info(`[LyricsManager] Restoring selected lyric: ${cachedEntry.selectedId}`);
+                    if (onProgress) onProgress("Restoring saved selection...");
                     return this.selectLyric(idx, false);
                 }
             }
@@ -298,6 +304,7 @@ export class LyricsManager {
                     // Since this is a "Fresh" load (not restoring selection), default to 0?
                     // Or just return keys?
                     // If we are just searching (no persistence yet), we pick 0.
+                    if (onProgress) onProgress("Results found in cache.");
                     return this.selectLyric(0, false);
                 }
                 return false;
@@ -333,12 +340,15 @@ export class LyricsManager {
                 // Rule 2: Only auto-select if the new result is "Acceptable" (> 45) AND better than what we have.
                 if (best && best.score > 45 && best.score > currentScore) {
                     Logger.info(`[LyricsManager] Auto-selecting better candidate from stream: ${best.title} (${best.score})`);
+
+                    if (onProgress) onProgress(`Found better match: ${best.source}`);
+
                     // We need to find the index in the new sorted array
                     const idx = this.lastResults.indexOf(best);
                     this.selectLyric(idx, true);
                 }
             }
-        });
+        }, onProgress);
 
         // 3.5 Check for Race Condition
         if (this.currentSongKey !== persistenceKey) {

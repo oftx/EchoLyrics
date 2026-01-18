@@ -15,5 +15,5 @@ export interface LyricsProvider {
      * @param song Metadata
      * @param limit Max results
      */
-    search(song: SongInformation, limit: number): Promise<LyricResult[]>;
+    search(song: SongInformation, limit: number, onProgress?: (msg: string) => void): Promise<LyricResult[]>;
 }

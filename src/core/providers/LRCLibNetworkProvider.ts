@@ -9,12 +9,12 @@ export class LRCLibNetworkProvider implements LyricsProvider {
     private readonly API_BASE = "/api/lrclib";
     private resolver = new SearchQueryResolver();
 
-    public async search(song: SongInformation, limit: number = 8): Promise<LyricResult[]> {
+    public async search(song: SongInformation, limit: number = 8, onProgress?: (msg: string) => void): Promise<LyricResult[]> {
         const uniqueQueries = await this.resolver.resolveQueries(song);
         const allResults: LyricResult[] = [];
 
         for (const query of uniqueQueries) {
-            const results = await this.doSearch(query.title, query.artist, limit);
+            const results = await this.doSearch(query.title, query.artist, limit, onProgress);
             if (results.length > 0) {
                 // Return found results immediately as proper prioritization is handled by resolver
                 Logger.info(`[LRCLIB] Found results for query "${query.title} - ${query.artist}". Stopping loop.`);
@@ -25,7 +25,7 @@ export class LRCLibNetworkProvider implements LyricsProvider {
         return allResults;
     }
 
-    private async doSearch(title: string, artist: string, limit: number): Promise<LyricResult[]> {
+    private async doSearch(title: string, artist: string, limit: number, onProgress?: (msg: string) => void): Promise<LyricResult[]> {
         try {
             const query = `${title} ${artist}`.trim();
             const searchUrl = `${this.API_BASE}/search?q=${encodeURIComponent(query)}`;
@@ -40,6 +40,7 @@ export class LRCLibNetworkProvider implements LyricsProvider {
 
             const data = await response.json();
             if (Array.isArray(data)) {
+                if (onProgress) onProgress(`Found ${Math.min(data.length, limit)} lyrics.`);
                 return data.slice(0, limit).map((item) => this.mapToLyricResult(item));
             }
             return [];

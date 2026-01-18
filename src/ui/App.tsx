@@ -647,16 +647,17 @@ export default function App() {
             isrc: item.isrc
         };
 
-        // We use a ref to track active request? 
-        // Actually, simpler: check a ref that stores 'latestSignature'.
-        // Let's create `latestSignatureRef` if we want to be safe, but passing signature to valid function works 
-        // IF we compare it against a Ref that holds the "current target".
-        // State `currentSongSignature` updates eventually.
-        // Let's use a mutable ref for the synchronous "latest" check.
-
         latestSignatureRef.current = signature;
 
-        const success = await manager.loadLyricsForSong(song, { localFileContent: localLrcContent });
+        const success = await manager.loadLyricsForSong(song, {
+            localFileContent: localLrcContent,
+            onProgress: (msg) => {
+                // Only update status if this request is still active
+                if (latestSignatureRef.current === signature) {
+                    setStatusMsg(msg);
+                }
+            }
+        });
 
         if (latestSignatureRef.current !== signature) {
             Logger.info("Ignoring stale lyric result.");
@@ -774,6 +775,10 @@ export default function App() {
             persistenceId = playlist[currentIndex].name;
         }
 
+        // Generate a temporary signature for manual search tracking
+        const currentSignature = `manual-${Date.now()}`;
+        latestSignatureRef.current = currentSignature;
+
         const song: SongInformation = {
             title: finalTitle,
             artists: [finalArtist],
@@ -786,8 +791,16 @@ export default function App() {
 
         const success = await manager.loadLyricsForSong(song, {
             ignoreCache: true, // Manual search always ignores cache to get fresh results
-            limit: searchLimit
+            limit: searchLimit,
+            onProgress: (msg) => {
+                if (latestSignatureRef.current === currentSignature) {
+                    setStatusMsg(msg);
+                }
+            }
         });
+
+        if (latestSignatureRef.current !== currentSignature) return;
+
         if (success) {
             setLyrics(manager.getCurrentLyrics());
             setStatusMsg("Lyrics found!");

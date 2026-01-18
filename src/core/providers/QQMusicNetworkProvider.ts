@@ -14,12 +14,12 @@ export class QQMusicNetworkProvider implements LyricsProvider {
 
     private resolver = new SearchQueryResolver();
 
-    public async search(song: SongInformation, limit: number = 8): Promise<LyricResult[]> {
+    public async search(song: SongInformation, limit: number = 8, onProgress?: (msg: string) => void): Promise<LyricResult[]> {
         const uniqueQueries = await this.resolver.resolveQueries(song);
         const allResults: LyricResult[] = [];
 
         for (const query of uniqueQueries) {
-            const results = await this.doSearch(query.title, query.artist, limit);
+            const results = await this.doSearch(query.title, query.artist, limit, onProgress);
             if (results.length > 0) {
                 Logger.info(`[QQMusic] Found results for query "${query.title} - ${query.artist}". Stopping loop.`);
                 return results;
@@ -28,7 +28,7 @@ export class QQMusicNetworkProvider implements LyricsProvider {
         return allResults;
     }
 
-    private async doSearch(title: string, artist: string, limit: number): Promise<LyricResult[]> {
+    private async doSearch(title: string, artist: string, limit: number, onProgress?: (msg: string) => void): Promise<LyricResult[]> {
         try {
             const artistPart = artist ? ` ${artist}` : "";
             const keyword = `${title}${artistPart}`;
@@ -47,9 +47,11 @@ export class QQMusicNetworkProvider implements LyricsProvider {
             }
 
             const searchResults = searchData.data.song.list;
-            Logger.info(`[QQMusic] Found ${searchResults.length} candidates. Fetching lyrics...`);
+            const statusMsg = `Found ${searchResults.length} candidates. Fetching lyrics...`;
+            Logger.info(`[QQMusic] ${statusMsg}`);
+            if (onProgress) onProgress(statusMsg);
 
-            return await this.processSearchResults(searchResults);
+            return await this.processSearchResults(searchResults, onProgress);
 
         } catch (error) {
             Logger.error("QQMusic search error:", error);
@@ -57,7 +59,10 @@ export class QQMusicNetworkProvider implements LyricsProvider {
         }
     }
 
-    private async processSearchResults(results: any[]): Promise<LyricResult[]> {
+    private async processSearchResults(results: any[], onProgress?: (msg: string) => void): Promise<LyricResult[]> {
+        const total = results.length;
+        let completed = 0;
+
         const promises = results.map(async (track: any) => {
             // Use local decryption middleware with full metadata for QRC fetching
             const artistName = track.singer ? track.singer[0].name : "Unknown";
@@ -91,6 +96,9 @@ export class QQMusicNetworkProvider implements LyricsProvider {
                         translationText = json.trans;
                     }
 
+                    completed++;
+                    if (onProgress) onProgress(`Fetching lyrics... ${completed}/${total}`);
+
                     return {
                         id: String(track.songmid),
                         title: track.songname,
@@ -106,6 +114,8 @@ export class QQMusicNetworkProvider implements LyricsProvider {
             } catch (e) {
                 Logger.warn(`[QQMusic] Error fetching lyric for ${track.songmid}`, e);
             }
+            completed++;
+            if (onProgress) onProgress(`Fetching lyrics... ${completed}/${total}`);
             return null;
         });
 

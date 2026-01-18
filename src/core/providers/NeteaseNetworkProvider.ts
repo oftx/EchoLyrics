@@ -10,12 +10,12 @@ export class NeteaseNetworkProvider implements LyricsProvider {
 
     private resolver = new SearchQueryResolver();
 
-    public async search(song: SongInformation, limit: number = 8): Promise<LyricResult[]> {
+    public async search(song: SongInformation, limit: number = 8, onProgress?: (msg: string) => void): Promise<LyricResult[]> {
         const uniqueQueries = await this.resolver.resolveQueries(song);
         const allResults: LyricResult[] = [];
 
         for (const query of uniqueQueries) {
-            const results = await this.doSearch(query.title, query.artist, limit);
+            const results = await this.doSearch(query.title, query.artist, limit, onProgress);
             if (results.length > 0) {
                 Logger.info(`[Netease] Found results for query "${query.title} - ${query.artist}". Stopping loop.`);
                 return results;
@@ -25,7 +25,7 @@ export class NeteaseNetworkProvider implements LyricsProvider {
         return allResults;
     }
 
-    private async doSearch(title: string, artist: string, limit: number): Promise<LyricResult[]> {
+    private async doSearch(title: string, artist: string, limit: number, onProgress?: (msg: string) => void): Promise<LyricResult[]> {
         try {
             const artistPart = artist ? ` ${artist}` : "";
             const keyword = `${title}${artistPart}`;
@@ -42,13 +42,21 @@ export class NeteaseNetworkProvider implements LyricsProvider {
             }
 
             const searchResults = searchData.result.songs;
-            Logger.info(`[Netease] Found ${searchResults.length} candidates. Fetching lyrics...`);
+            const statusMsg = `Found ${searchResults.length} candidates. Fetching lyrics...`;
+            Logger.info(`[Netease] ${statusMsg}`);
+            if (onProgress) onProgress(statusMsg);
+
+            const total = searchResults.length;
+            let completed = 0;
 
             const lyricPromises = searchResults.map(async (track: any) => {
                 const lyricUrl = `${this.API_BASE}/api/song/lyric?os=pc&id=${track.id}&lv=-1&kv=-1&tv=-1`;
                 try {
                     const lyricResponse = await fetch(lyricUrl);
                     const lyricData = await lyricResponse.json();
+
+                    completed++;
+                    if (onProgress) onProgress(`Fetching lyrics... ${completed}/${total}`);
 
                     if (lyricData.code === 200 && lyricData.lrc && lyricData.lrc.lyric) {
                         return {
@@ -67,6 +75,8 @@ export class NeteaseNetworkProvider implements LyricsProvider {
                         } as LyricResult;
                     }
                 } catch (e) {
+                    completed++;
+                    if (onProgress) onProgress(`Fetching lyrics... ${completed}/${total}`);
                     Logger.warn(`[Netease] Failed to fetch lyrics for ${track.id}`, e);
                 }
                 return null;

@@ -20,12 +20,10 @@ export class LyricsSearcherService implements LyricsSearcher {
         return this.providers;
     }
 
-    public async search(song: SongInformation, limit: number = 15, onResult?: (results: LyricResult[]) => void): Promise<LyricResult[]> {
+    public async search(song: SongInformation, limit: number = 15, onResult?: (results: LyricResult[]) => void, onProgress?: (msg: string) => void): Promise<LyricResult[]> {
         // Spec 2.3.1.2: Multi-source concurrent search.
 
-        // 1. Resolve aliases centrally if strict matching failed before? 
-        // Actually, to implement the plan "Update LyricsSearcherService to populate aliases", 
-        // I need to instantiate SearchQueryResolver here.
+        if (onProgress) onProgress("Resolving search queries...");
 
         const resolver = new SearchQueryResolver();
         const queries = await resolver.resolveQueries(song);
@@ -41,7 +39,26 @@ export class LyricsSearcherService implements LyricsSearcher {
 
         const searchTasks = this.providers.map(async (p) => {
             try {
-                const results = await p.search(song, limit);
+                if (onProgress) onProgress(`Searching ${p.name}...`);
+
+                // Wrap onProgress to bubble up messages
+                const wrappedProgress = onProgress ? (msg: string) => {
+                    // Decide if we should prefix? 
+                    // Providers might already format nicely.
+                    // But to be safe and consistent:
+                    // If msg already starts with provider name, pass as is.
+                    // Otherwise prefix.
+                    if (msg.startsWith(`[${p.name}]`)) {
+                        onProgress(msg);
+                    } else {
+                        onProgress(`[${p.name}] ${msg}`);
+                    }
+                } : undefined;
+
+                const results = await p.search(song, limit, wrappedProgress);
+
+                if (onProgress) onProgress(`${p.name} found ${results.length} result(s)`);
+
                 // Score immediately
                 results.forEach(res => {
                     res.score = this.scoringService.calculateScore(song, res);
@@ -58,6 +75,7 @@ export class LyricsSearcherService implements LyricsSearcher {
                 return results;
             } catch (err) {
                 console.error(`Provider ${p.name} failed:`, err);
+                if (onProgress) onProgress(`${p.name} failed.`);
                 return [] as LyricResult[];
             }
         });

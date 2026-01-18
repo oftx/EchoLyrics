@@ -5,9 +5,13 @@ import { SongInformation } from "../interfaces/SongInformation";
 export class MockNetworkProvider implements LyricsProvider {
     public name = "MockNetwork";
 
-    public async search(song: SongInformation): Promise<LyricResult[]> {
+    public async search(song: SongInformation, limit: number = 8, onProgress?: (msg: string) => void): Promise<LyricResult[]> {
         // Simulate network delay
+        if (onProgress) onProgress("Simulating network delay...");
         await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Use limit to suppress unused variable warning
+        if (onProgress) onProgress(`[Mock] Search limit: ${limit}`);
 
         // Return a dummy result that effectively matches
         return [{
