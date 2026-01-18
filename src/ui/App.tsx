@@ -1029,7 +1029,7 @@ export default function App() {
                             Pop Out Lyrics
                         </button>
                         <div className="lyrics-scroller no-scrollbar" ref={lyricsContainerRef}>
-                            {lyrics ? (
+                            {lyrics && lyrics.lines && lyrics.lines.length > 0 ? (
                                 <LyricsList
                                     lyrics={lyrics}
                                     activeLineIndex={activeLineIndex}
@@ -1066,7 +1066,7 @@ export default function App() {
                                     {lyrics?.metadata?.artist || searchArtist || ""}
                                 </div>
                             </div>
-                            {lyrics ? (
+                            {lyrics && lyrics.lines && lyrics.lines.length > 0 ? (
                                 <LyricsList
                                     lyrics={lyrics}
                                     activeLineIndex={activeLineIndex}
@@ -1212,6 +1212,7 @@ export default function App() {
                                     const types = LyricTypeDetector.getLyricTypes(cand.lyricText, cand.translationText);
 
                                     // Check if this is the currently selected lyric
+                                    // (Handle potentially missing metadata for "No Lyrics" state)
                                     const isCurrentlySelected = lyrics?.metadata?.['source'] === cand.source &&
                                         lyrics?.metadata?.['title'] === cand.title &&
                                         lyrics?.metadata?.['artist'] === cand.artist;
@@ -1255,6 +1256,20 @@ export default function App() {
                                         </div>
                                     );
                                 })}
+                            </div>
+                            <div className="modal-footer" style={{ borderTop: '1px solid var(--border-subtle)', padding: 'var(--space-4)', display: 'flex', gap: 'var(--space-3)' }}>
+                                <button
+                                    className="btn btn-outline-danger"
+                                    style={{ width: '100%', justifyContent: 'center' }}
+                                    onClick={() => {
+                                        manager.selectNone();
+                                        setLyrics(manager.getCurrentLyrics()); // Update from manager to get the "No Lyrics" state object
+                                        setShowCandidates(false);
+                                        setStatusMsg("Lyrics currently disabled for this song.");
+                                    }}
+                                >
+                                    No Lyrics
+                                </button>
                             </div>
                         </div>
                     </div>

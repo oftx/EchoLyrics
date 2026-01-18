@@ -288,6 +288,22 @@ export class LyricsManager {
                     if (onProgress) onProgress("Restoring saved selection...");
                     return this.selectLyric(idx, false);
                 }
+            } else if (cachedEntry && cachedEntry.selectedId === "NO_LYRIC") {
+                Logger.info(`[LyricsManager] Found persistent 'NO_LYRIC' choice for ${persistenceKey}. Aborting.`);
+                // Return an empty object BUT with metadata so the UI knows we have "something" (a decision)
+                // and keeps the "Switch Lyrics" button visible.
+                this.currentLyrics = {
+                    lines: [],
+                    isSynced: false,
+                    metadata: {
+                        title: song.title,
+                        artist: song.artists.join(", "),
+                        source: "No Lyrics Selected"
+                    }
+                };
+                this.notifyListeners();
+                if (onProgress) onProgress("Restoring saved selection (No Lyrics).");
+                return true;
             }
         }
 
@@ -448,6 +464,25 @@ export class LyricsManager {
         }
 
         return true;
+    }
+
+    public selectNone() {
+        Logger.info("[LyricsManager] User selected 'No Lyrics'. Clearing and persisting.");
+
+        // Use a valid object so UI knows we have handled it
+        this.currentLyrics = {
+            lines: [],
+            isSynced: false,
+            metadata: {
+                source: "No Lyrics Selected"
+            }
+        };
+        this.notifyListeners();
+
+        if (this.currentSongKey) {
+            // Save special marker "NO_LYRIC"
+            this.saveCache(this.currentSongKey, this.lastResults, "NO_LYRIC");
+        }
     }
 
     public markResultAsIncorrect() {
